@@ -17,6 +17,7 @@ from prism.query.parser import QueryParser
 from prism.query.engine import QueryEngine
 from prism.tracking import ChangeTracker
 
+from .repl import Repl
 from .tutor import Tutor
 
 
@@ -543,6 +544,23 @@ def tutor(lesson: int) -> None:
     """Launch interactive tutorial in a sandbox vault."""
     t = Tutor(lesson_number=lesson)
     t.run()
+
+
+@cli.command()
+@click.option("--vault", "-v", default=None, help="Path to vault directory")
+@click.pass_context
+def repl(ctx: click.Context, vault: Optional[str]) -> None:
+    """Launch an interactive REPL session."""
+    current_vault = ctx.obj.get("vault")
+    if vault:
+        try:
+            current_vault = Vault.open(vault)
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+
+    r = Repl(vault=current_vault)
+    r.run()
 
 
 def main() -> None:

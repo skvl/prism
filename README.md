@@ -72,6 +72,48 @@ prism verify <uuid>
 | `prism query <query>` | Search nodes |
 | `prism status` | Show vault status |
 | `prism verify <uuid>` | Verify blob integrity |
+| `prism repl` | Launch an interactive REPL session |
+
+## REPL Mode
+
+Launch an interactive REPL session for a persistent, stateful experience:
+
+```bash
+# Inside a vault directory
+prism repl
+
+# With an explicit vault path
+prism repl --vault ~/my-vault
+```
+
+The REPL provides:
+
+- **Aliases** — shorter command names (`n` for `new`, `s` for `show`, `q` for `query`, `l` for `link`, etc.)
+- **Tab completion** — complete commands, UUIDs, type names, and tags
+- **Session state** — the last created/modified UUID is stored as `_` (e.g., `show _`)
+- **Command history** — persistent across sessions (saved to `~/.prism_repl_history`)
+- **Degraded mode** — outside a vault, only `init`, `open`, `help`, and `exit` are available
+
+### REPL Commands
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `init` | | Initialize a new vault |
+| `open` | | Open an existing vault |
+| `new` | `n` | Create a new typed node |
+| `show` | `s` | Display node details |
+| `edit` | `e` | Edit a node |
+| `rm` | | Delete a node |
+| `query` | `q` | Search nodes |
+| `link` | `l` | Create a directed link |
+| `backlinks` | `bl` | Show backlinks |
+| `graph` | `g` | Export the node graph |
+| `status` | `st` | Show vault status |
+| `add-file` | `af` | Import a file |
+| `verify` | `v` | Verify blob integrity |
+| `history` | | Show command history |
+| `help` | | Show help and aliases |
+| `exit` / `quit` | | Exit the REPL |
 
 ## Architecture
 
