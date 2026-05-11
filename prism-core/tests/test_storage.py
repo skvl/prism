@@ -62,6 +62,43 @@ class TestStorageEngine:
         assert engine.verify_integrity(uid, h) is True
         assert engine.verify_integrity(uid, "wronghash") is False
 
+    def test_read_blob_nonexistent(self, engine):
+        result = engine.read_blob("00000000-0000-0000-0000-000000000000")
+        assert result is None
+
+    def test_read_blob_no_data_file(self, engine, vault_dir):
+        uid = str(uuid.uuid4())
+        storage_dir = compute_storage_path(vault_dir, uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        with open(os.path.join(storage_dir, "metadata.toml"), "w") as f:
+            f.write("")
+        result = engine.read_blob(uid)
+        assert result is None
+
+    def test_get_blob_path(self, engine, vault_dir):
+        src = os.path.join(vault_dir, "test.txt")
+        with open(src, "w") as f:
+            f.write("hello")
+        uid = str(uuid.uuid4())
+        engine.import_blob(src, uid)
+        path = engine.get_blob_path(uid)
+        assert path is not None
+        assert path.endswith(".txt")
+
+    def test_get_blob_path_nonexistent(self, engine):
+        path = engine.get_blob_path("00000000-0000-0000-0000-000000000000")
+        assert path is None
+
+    def test_get_blob_path_no_data_file(self, engine, vault_dir):
+        uid = str(uuid.uuid4())
+        storage_dir = compute_storage_path(vault_dir, uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        path = engine.get_blob_path(uid)
+        assert path is None
+
+    def test_verify_integrity_no_blob(self, engine):
+        assert engine.verify_integrity("00000000-0000-0000-0000-000000000000", "hash") is False
+
 
 class TestSha256:
     def test_sha256_file(self):

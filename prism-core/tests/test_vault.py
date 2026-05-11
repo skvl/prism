@@ -5,7 +5,9 @@ import uuid
 from pathlib import Path
 
 import pytest
+import tomlkit
 
+from prism.vault.context import detect_vault
 from prism.vault.vault import Vault, generate_uuid, uuid_to_path
 
 
@@ -54,6 +56,41 @@ class TestVaultLifecycle:
         with pytest.raises(FileExistsError):
             Vault.init(temp_dir)
 
+    def test_validate_missing_dirs(self, temp_dir):
+        vault = Vault(temp_dir, "some-uuid", 1, "2024-01-01")
+        issues = vault.validate()
+        assert len(issues) >= 5
+
+    def test_validate_mismatched_uuid(self, temp_dir):
+        vault = Vault.init(temp_dir)
+        vault_toml = Path(temp_dir) / ".metadata" / "vault.toml"
+        doc = tomlkit.loads(vault_toml.read_text())
+        doc["vault_uuid"] = "different-uuid"
+        vault_toml.write_text(tomlkit.dumps(doc))
+        issues = vault.validate()
+        assert any("vault_uuid mismatch" in i for i in issues)
+
+    def test_validate_mismatched_schema(self, temp_dir):
+        vault = Vault.init(temp_dir)
+        vault_toml = Path(temp_dir) / ".metadata" / "vault.toml"
+        doc = tomlkit.loads(vault_toml.read_text())
+        doc["schema_version"] = 999
+        vault_toml.write_text(tomlkit.dumps(doc))
+        issues = vault.validate()
+        assert any("schema_version mismatch" in i for i in issues)
+
+    def test_validate_corrupt_toml(self, temp_dir):
+        vault = Vault.init(temp_dir)
+        vault_toml = Path(temp_dir) / ".metadata" / "vault.toml"
+        vault_toml.write_text("not [[valid toml\n")
+        issues = vault.validate()
+        assert any("Failed to parse" in i for i in issues)
+
+    def test_init_nonempty_directory(self, temp_dir):
+        Path(temp_dir, "existing.txt").touch()
+        Vault.init(temp_dir)
+        assert os.path.exists(os.path.join(temp_dir, ".metadata"))
+
 
 class TestVaultRegistry:
     @pytest.fixture
@@ -87,3 +124,47 @@ class TestVaultRegistry:
         result = registry.get_by_path("/my/path")
         assert result is not None
         assert result["path"] == "/my/path"
+
+    def test_get_by_uuid_not_found(self, registry):
+        result = registry.get_by_uuid("nonexistent")
+        assert result is None
+
+    def test_get_by_path_not_found(self, registry):
+        result = registry.get_by_path("/nonexistent")
+        assert result is None
+
+    def test_add_duplicate_path(self, registry):
+        registry.add("uuid-1", "/path/to/vault")
+        registry.add("uuid-2", "/path/to/vault")
+        vaults = registry.list()
+        assert len(vaults) == 1
+
+
+class TestVaultContext:
+    @pytest.fixture
+    def temp_dir(self):
+        d = tempfile.mkdtemp()
+        yield d
+        shutil.rmtree(d)
+
+    def test_detect_with_flag(self, temp_dir):
+        vault = Vault.init(temp_dir)
+        detected = detect_vault("/some/other/dir", vault_flag=temp_dir)
+        assert detected is not None
+        assert detected.vault_uuid == vault.vault_uuid
+
+    def test_detect_by_walk(self, temp_dir):
+        vault = Vault.init(temp_dir)
+        subdir = os.path.join(temp_dir, "a", "b", "c")
+        os.makedirs(subdir)
+        detected = detect_vault(subdir)
+        assert detected is not None
+        assert detected.vault_uuid == vault.vault_uuid
+
+    def test_detect_no_vault(self):
+        d = tempfile.mkdtemp()
+        try:
+            detected = detect_vault(d)
+            assert detected is None
+        finally:
+            shutil.rmtree(d)

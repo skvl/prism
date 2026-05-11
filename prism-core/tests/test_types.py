@@ -96,3 +96,12 @@ class TestFieldValidator:
         validator = FieldValidator(schema)
         errors = validator.validate({})
         assert len(errors) > 0
+
+    def test_unknown_type_passes_validation(self):
+        schema = TypeSchema(
+            name="test",
+            fields=[FieldDef(name="val", type="unknown_type", required=True)],
+        )
+        validator = FieldValidator(schema)
+        errors = validator.validate({"val": "anything"})
+        assert len(errors) == 0
