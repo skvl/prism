@@ -6,7 +6,7 @@ The system SHALL support creating a directed link from one node to another.
 
 #### Scenario: Link two nodes
 - **WHEN** user runs `prism link <source-uuid> <target-uuid>`
-- **THEN** the system SHALL add `{target: <target-uuid>, type: <target-type>, title: <target-title>}` to source node's metadata.yaml `links` array
+- **THEN** the system SHALL add `{target: <target-uuid>, type: <target-type>, title: <target-title>}` to source node's metadata.toml `links` array
 - **THEN** the system SHALL add the source UUID to the target node's backlinks index
 
 #### Scenario: Link to non-existent node
@@ -21,7 +21,7 @@ The system SHALL detect and extract `[[uuid]]` patterns from note body markdown 
 #### Scenario: Extract links on edit
 - **WHEN** user saves a note in `prism edit` containing `[[a1b2c3d4-...]]` and `[[other-vault-uuid::f1e2d3c4-...]]`
 - **THEN** the system SHALL extract all UUIDs and vault-qualified UUIDs from the body
-- **THEN** the system SHALL update the node's metadata.yaml `links` array
+- **THEN** the system SHALL update the node's metadata.toml `links` array
 - **THEN** the system SHALL rebuild the backlinks index
 
 #### Scenario: Remove stale links

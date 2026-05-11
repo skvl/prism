@@ -1,7 +1,7 @@
 ## 1. Project Setup
 
 - [ ] 1.1 Initialize Python monorepo structure: `prism-core/` library package and `prism-cli/` CLI package
-- [ ] 1.2 Configure `pyproject.toml` with dependencies (`pyyaml`, `click`, `click-default-group`)
+- [ ] 1.2 Configure `pyproject.toml` with dependencies (`tomlkit`, `click`, `click-default-group`)
 - [ ] 1.3 Set up `pytest`, `ruff` linter, `mypy` type checking
 - [ ] 1.4 Create `prism-core/prism/__init__.py` with version constant
 - [ ] 1.5 Create `prism-core/prism/vault/`, `prism-core/prism/node/`, `prism-core/prism/types/`, `prism-core/prism/graph/`, `prism-core/prism/query/` module directories
@@ -10,16 +10,16 @@
 
 - [ ] 2.1 Implement UUID generation (UUIDv7) and UUID partitioning utility (`uuid_to_path(uuid) -> str`)
 - [ ] 2.2 Implement `Vault` class with `init(path)`, `open(path)`, `validate()` methods
-- [ ] 2.3 Implement vault directory creation: `.storage/`, `.metadata/`, `.metadata/types/`, `.metadata/index.txt`, `.metadata/vault.yaml`
-- [ ] 2.4 Implement `vault.yaml` format: vault UUID, schema version, creation timestamp
-- [ ] 2.5 Implement vault registry at `~/.config/prism/vaults.yaml`: add, list, remove vaults
+- [ ] 2.3 Implement vault directory creation: `.storage/`, `.metadata/`, `.metadata/types/`, `.metadata/index.txt`, `.metadata/vault.toml`
+- [ ] 2.4 Implement `vault.toml` format: vault UUID, schema version, creation timestamp
+- [ ] 2.5 Implement vault registry at `~/.config/prism/vaults.toml`: add, list, remove vaults
 - [ ] 2.6 Implement vault context detection: auto-detect current vault from CWD or `--vault` flag
 
 ## 3. Type System
 
 - [ ] 3.1 Implement `TypeSchema` dataclass: name, icon, fields (name, type, required flag, default)
-- [ ] 3.2 Implement `TypeLoader`: scan `.metadata/types/*.yaml`, parse and validate schemas
-- [ ] 3.3 Create built-in type YAML files: `note.yaml`, `contact.yaml`, `bookmark.yaml`, `file.yaml`
+- [ ] 3.2 Implement `TypeLoader`: scan `.metadata/types/*.toml`, parse and validate schemas
+- [ ] 3.3 Create built-in type TOML files: `note.toml`, `contact.toml`, `bookmark.toml`, `file.toml`
 - [ ] 3.4 Implement `FieldValidator`: validate field values against schema (required check, type check)
 - [ ] 3.5 Support `body_model` in schema: `file(markdown)`, `file(binary)`, `null`
 
@@ -35,7 +35,7 @@
 ## 5. Node Management
 
 - [ ] 5.1 Implement `NodeMetadata` dataclass: uuid, type, title, tags, fields dict, links list, timestamps, blob info
-- [ ] 5.2 Implement `metadata.yaml` read/write with `ruamel.yaml` (preserving comments on future updates?)
+- [ ] 5.2 Implement `metadata.toml` read/write with `tomlkit` (preserving comments on future updates)
 - [ ] 5.3 Implement `create_node(vault, type_name, fields, blob_path?) -> Node`: create metadata.yaml + optional data.*
 - [ ] 5.4 Implement `edit_node_body(uuid, vault)`: open `data.*` in `$EDITOR`, detect changes via mtime, re-extract links
 - [ ] 5.5 Implement `edit_node_fields(uuid, vault)`: interactive dialog for structured field editing

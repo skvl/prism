@@ -6,35 +6,35 @@ The system SHALL ship with four built-in type schemas defined in `.metadata/type
 
 #### Scenario: Note type schema
 - **WHEN** the vault is initialized
-- **THEN** `.metadata/types/note.yaml` SHALL exist with fields: `title` (string, optional), `tags` (list of string, optional)
+- **THEN** `.metadata/types/note.toml` SHALL exist with fields: `title` (string, optional), `tags` (list of string, optional)
 - **THEN** the note type SHALL have `body_model: file(markdown)` indicating the body lives in `data.md`
 
 #### Scenario: Contact type schema
 - **WHEN** the vault is initialized
-- **THEN** `.metadata/types/contact.yaml` SHALL exist with fields: `name` (string, required), `email` (string, optional), `phone` (string, optional), `org` (string, optional)
+- **THEN** `.metadata/types/contact.toml` SHALL exist with fields: `name` (string, required), `email` (string, optional), `phone` (string, optional), `org` (string, optional)
 - **THEN** the contact type SHALL have `body_model: null` indicating no companion file
 
 #### Scenario: Bookmark type schema
 - **WHEN** the vault is initialized
-- **THEN** `.metadata/types/bookmark.yaml` SHALL exist with fields: `url` (url, required), `title` (string, optional), `tags` (list of string, optional)
+- **THEN** `.metadata/types/bookmark.toml` SHALL exist with fields: `url` (url, required), `title` (string, optional), `tags` (list of string, optional)
 - **THEN** the bookmark type SHALL have `body_model: null`
 
 #### Scenario: File type schema
 - **WHEN** the vault is initialized
-- **THEN** `.metadata/types/file.yaml` SHALL exist with no custom fields
+- **THEN** `.metadata/types/file.toml` SHALL exist with no custom fields
 - **THEN** the file type SHALL have `body_model: file(binary)` indicating the blob is opaque
 
 ### Requirement: Schema format
 
-Type schemas SHALL follow a standard YAML format.
+Type schemas SHALL follow a standard TOML format.
 
 #### Scenario: Schema structure
 - **WHEN** reading any type schema file
-- **THEN** the schema SHALL contain: `name`, `icon` (optional emoji), `fields` (array of field definitions)
-- **THEN** each field definition SHALL contain: `name`, `type` (`string`, `url`, `datetime`, `number`, `list[str]`), `required` (boolean, default false)
+- **THEN** the schema SHALL contain: `name`, `icon` (optional emoji), `fields` (array of inline tables)
+- **THEN** each field definition SHALL contain: `name`, `type` (`string`, `url`, `datetime`, `number`, `array`), `required` (boolean, default false)
 
-#### Scenario: Contact schema YAML example
-- **WHEN** the system reads `.metadata/types/contact.yaml`
+#### Scenario: Contact schema TOML example
+- **WHEN** the system reads `.metadata/types/contact.toml`
 - **THEN** the content SHALL parse as valid YAML matching the schema format
 
 ### Requirement: Custom user types
@@ -42,7 +42,7 @@ Type schemas SHALL follow a standard YAML format.
 The system SHALL allow users to define custom types by creating new files in `.metadata/types/`.
 
 #### Scenario: Create custom type
-- **WHEN** user creates `.metadata/types/movie.yaml` with required fields
+- **WHEN** user creates `.metadata/types/movie.toml` with required fields
 - **THEN** the system SHALL recognize `movie` as a valid type on next command
 - **THEN** user can run `prism new movie --title "Inception" --year 2010`
 

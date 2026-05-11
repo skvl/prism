@@ -8,7 +8,7 @@ The system SHALL import a file into the vault's blob store, copying it into a UU
 - **WHEN** user runs `prism add ~/Documents/report.pdf`
 - **THEN** the system SHALL generate a new UUID
 - **THEN** the system SHALL copy the file to `.storage/<uuid-partitioned>/data.pdf`
-- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.yaml` with type `file`, original filename, mtime, size, and SHA-256 hash
+- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.toml` with type `file`, original filename, mtime, size, and SHA-256 hash
 - **THEN** the system SHALL output the node UUID
 
 #### Scenario: Import file with explicit type
@@ -33,7 +33,7 @@ The system SHALL store blobs in a UUID-partitioned directory tree to prevent dir
 #### Scenario: Original extension preserved
 - **WHEN** importing `photo.jpg`
 - **THEN** the blob file SHALL be named `data.jpg`
-- **THEN** the original extension SHALL be stored in metadata.yaml as `blob_extension: jpg`
+- **THEN** the original extension SHALL be stored in metadata.toml as `blob_extension = "jpg"`
 
 ### Requirement: SHA-256 content hashing
 
@@ -42,7 +42,7 @@ The system SHALL compute and store SHA-256 hashes for all imported blobs.
 #### Scenario: Hash on import
 - **WHEN** a blob is imported
 - **THEN** the system SHALL compute its SHA-256 hash
-- **THEN** the hash SHALL be stored in metadata.yaml as `blob_sha256`
+- **THEN** the hash SHALL be stored in metadata.toml as `blob_sha256`
 
 #### Scenario: Verify integrity
 - **WHEN** user runs `prism verify <uuid>`

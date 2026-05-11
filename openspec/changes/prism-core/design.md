@@ -10,7 +10,7 @@ This document covers the core library (`prism-core`) and CLI interface (`prism-c
 - Content-addressed blob storage: every file imported into Prism is stored as `data.*` under a UUID-partitioned path in `.storage/`
 - Typed node graph: nodes have types defined by YAML schema files, with `[[uuid]]` links forming a directed graph
 - Metadata-only nodes: contacts, bookmarks, and structured types live purely as `metadata.yaml` with no companion file
-- YAML-first metadata: all node metadata is stored in human-readable, diffable, mergeable YAML files
+- TOML-first metadata: all node metadata is stored in human-readable, diffable, mergeable TOML files (predictable format for future three-way merge during sync)
 - Vault portability: a vault is a directory containing `.storage/` + `.metadata/`, fully self-contained and movable
 - Graceful cross-vault linking: `[[vault-uuid::target-uuid]]` resolves lazily, cached in metadata.yaml
 - CLI as power tool: full command set with structured output for scripting
@@ -46,16 +46,16 @@ This document covers the core library (`prism-core`) and CLI interface (`prism-c
 - Reduces filesystem operations (one file per node regardless of type)
 - Trade-off: cannot grep for contacts easily. Mitigated by `prism query` and future TUI/GUI.
 
-### Decision: Source of truth is dual (YAML metadata + blob files)
+### Decision: Source of truth is dual (TOML metadata + blob files)
 
 **Chosen** over a central database.
 
 - `.metadata/index.txt` maps paths → UUIDs (for file tracking)
-- `.metadata/types/*.yaml` define type schemas
-- `.storage/<uuid>/metadata.yaml` per node (links, tags, fields, timestamps)
+- `.metadata/types/*.toml` define type schemas
+- `.storage/<uuid>/metadata.toml` per node (links, tags, fields, timestamps)
 - `.storage/<uuid>/data.EXT` per blob node
-- SQLite index is derived (rebuildable), not source of truth
-- Trade-off: slower queries than a pure DB. Mitigated by small scale (single user, <100K nodes).
+- TOML chosen over YAML for merge predictability. When the future sync daemon performs three-way merges of metadata files, TOML's strict format eliminates semantic ambiguity that YAML's flexible parsing would introduce.
+- Trade-off: TOML's `[[array]]` syntax is more verbose for deeply nested structures than YAML. Acceptable since schemas are written once and rarely modified.
 
 ### Decision: `[[uuid]]` links with lazy resolution
 
@@ -86,11 +86,11 @@ This document covers the core library (`prism-core`) and CLI interface (`prism-c
 - Future sync daemon as a separate Rust binary (`prism-syncd`) using p2panda
 - Communication via filesystem protocol: sync daemon reads dirty flags from metadata.yaml
 
-### Decision: Type schemas as directory of YAML files
+### Decision: Type schemas as directory of TOML files
 
 **Chosen** over a single monolithic types file.
 
-- `.metadata/types/note.yaml`, `contact.yaml`, `bookmark.yaml`, `file.yaml`
+- `.metadata/types/note.toml`, `contact.toml`, `bookmark.toml`, `file.toml`
 - Each type file contains field definitions (name, type, required, default)
 - Adding a type = dropping a new file. Merging = per-file, no conflicts.
 - Schema validation on `prism new` and `prism edit`
@@ -100,7 +100,7 @@ This document covers the core library (`prism-core`) and CLI interface (`prism-c
 | Risk | Mitigation |
 |---|---|
 | Blob store model requires user to always use Prism for file access | CLI + future TUI/GUI/WebUI provide the interface. Power users can navigate `.storage/` directly if needed. |
-| YAML as source of truth is slower than SQLite | Index.db is rebuilt on demand for fast queries. YAML is write-time source of truth, DB is read-time cache. |
-| [[uuid]] links break if user edits metadata.yaml behind Prism's back | This is undefined behavior — user agreed not to mutate vault outside Prism. Corruption detection in `prism validate`. |
+| TOML metadata files are slower to query than a DB | `.metadata/index.txt` provides fast UUID lookups. Full scans are acceptable at single-user scale. |
+| [[uuid]] links break if user edits metadata.toml behind Prism's back | This is undefined behavior — user agreed not to mutate vault outside Prism. Corruption detection in `prism validate`. |
 | Python performance for large vaults | MVP targets single-user scale. If performance becomes an issue, critical paths can be reimplemented in Rust incrementally (the architecture is designed for this). |
-| No full-text search engine in MVP | Basic grep-based search is sufficient for MVP. SQLite FTS5 or Tantivy can be added post-MVP. |
+| No full-text search engine in MVP | Basic grep-based search is sufficient for MVP. A dedicated engine can be added post-MVP if needed. |

@@ -6,19 +6,19 @@ The system SHALL create a new node of a specified type with given fields.
 
 #### Scenario: Create note node
 - **WHEN** user runs `prism new note "Meeting Notes"`
-- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.yaml` with type `note`, title "Meeting Notes", and current timestamp
+- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.toml` with type `note`, title "Meeting Notes", and current timestamp
 - **THEN** the system SHALL create `.storage/<uuid-partitioned>/data.md` with the title as an H1 header and empty body
 - **THEN** the system SHALL output the new node's UUID
 
 #### Scenario: Create contact node
 - **WHEN** user runs `prism new contact --name "Alice" --email alice@example.com`
-- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.yaml` with type `contact`, name "Alice", email "alice@example.com"
+- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.toml` with type `contact`, name "Alice", email "alice@example.com"
 - **THEN** the system SHALL NOT create any `data.*` file
 - **THEN** the system SHALL output the new node's UUID
 
 #### Scenario: Create bookmark node
 - **WHEN** user runs `prism new bookmark "https://example.com" --title "Example"`
-- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.yaml` with type `bookmark`, url "https://example.com", title "Example"
+- **THEN** the system SHALL create `.storage/<uuid-partitioned>/metadata.toml` with type `bookmark`, url "https://example.com", title "Example"
 - **THEN** the system SHALL NOT create any `data.*` file
 
 #### Scenario: Create node with missing required field
@@ -34,19 +34,19 @@ The system SHALL allow editing node metadata fields and note body content.
 - **WHEN** user runs `prism edit <note-uuid>`
 - **THEN** the system SHALL open `.storage/<uuid-partitioned>/data.md` in `$EDITOR`
 - **THEN** after editor exits, the system SHALL detect changes via mtime comparison
-- **THEN** the system SHALL re-extract `[[uuid]]` links from the body and update metadata.yaml links array
-- **THEN** the system SHALL update `updated_at` and `blob_sha256` in metadata.yaml
+- **THEN** the system SHALL re-extract `[[uuid]]` links from the body and update metadata.toml links array
+- **THEN** the system SHALL update `updated_at` and `blob_sha256` in metadata.toml
 
 #### Scenario: Edit structured field via dialog
 - **WHEN** user runs `prism edit <contact-uuid>`
 - **THEN** the system SHALL display an interactive dialog showing each field with current value
 - **THEN** the system SHALL prompt "Enter new <field_name> or press ENTER to keep [current_value]"
-- **THEN** the system SHALL update metadata.yaml with changed fields
+- **THEN** the system SHALL update metadata.toml with changed fields
 
 #### Scenario: Cancel edit (no changes)
 - **WHEN** user runs `prism edit <note-uuid>` and closes the editor without changes
 - **THEN** the system SHALL detect that mtime has not changed
-- **THEN** the system SHALL NOT update metadata.yaml
+- **THEN** the system SHALL NOT update metadata.toml
 - **THEN** the system SHALL output "No changes detected"
 
 ### Requirement: Delete node

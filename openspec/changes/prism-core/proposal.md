@@ -36,6 +36,6 @@ None — this is a greenfield project.
 
 - **Repository**: New monorepo at `file_manager/` with Python core + CLI
 - **Language**: Python 3.12+ with type hints
-- **Dependencies**: `pyyaml` for metadata, `watchdog` (future), `click` or `argparse` for CLI
+- **Dependencies**: `tomlkit` for metadata read/write, `tomllib` (stdlib ≥3.11) for read-only, `click` for CLI
 - **Future**: Sync daemon in Rust using `p2panda` — communicates via filesystem (dirty flags in metadata.yaml)
 - **Distribution**: `pip install prism-cli` or standalone via `pipx`

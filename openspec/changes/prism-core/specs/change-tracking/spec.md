@@ -2,11 +2,11 @@
 
 ### Requirement: Per-node mtime tracking
 
-Each node's metadata.yaml SHALL store the mtime of its associated blob file for change detection.
+Each node's metadata.toml SHALL store the mtime of its associated blob file for change detection.
 
 #### Scenario: Store mtime on import
 - **WHEN** a blob is imported or a note is created
-- **THEN** metadata.yaml SHALL store `blob_mtime` (filesystem mtime of `data.*`) and `blob_size` (file size in bytes)
+- **THEN** metadata.toml SHALL store `blob_mtime` (filesystem mtime of `data.*`) and `blob_size` (file size in bytes)
 
 #### Scenario: Update mtime on edit
 - **WHEN** user edits a note via `prism edit`
@@ -39,7 +39,7 @@ When a note's body changes, the system SHALL re-extract `[[uuid]]` links.
 #### Scenario: Re-extract on status
 - **WHEN** user runs `prism status` and a changed note is detected
 - **THEN** the system SHALL offer: "Re-extract links from changed note <uuid>? [y/N]"
-- **THEN** on confirmation, re-extract `[[uuid]]` patterns and update metadata.yaml links array
+- **THEN** on confirmation, re-extract `[[uuid]]` patterns and update metadata.toml links array
 
 #### Scenario: Auto-re-extract on edit
 - **WHEN** user runs `prism edit` and saves changes
@@ -51,6 +51,6 @@ The system SHALL maintain a dirty flag mechanism for future sync integration.
 
 #### Scenario: Flag node as dirty
 - **WHEN** a node's blob or metadata changes
-- **THEN** the system SHALL set `sync_dirty: true` in metadata.yaml
+- **THEN** the system SHALL set `sync_dirty = true` in metadata.toml
 - **THEN** the system SHALL update `updated_at` to current timestamp
 - **THEN** these two fields serve as the cursor for the future sync daemon
