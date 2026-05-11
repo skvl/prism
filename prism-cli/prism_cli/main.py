@@ -17,6 +17,8 @@ from prism.query.parser import QueryParser
 from prism.query.engine import QueryEngine
 from prism.tracking import ChangeTracker
 
+from .tutor import Tutor
+
 
 @click.group()
 @click.option("--vault", "-v", default=None, help="Path to vault directory")
@@ -533,6 +535,14 @@ def verify(ctx: click.Context, uuid: str) -> None:
     else:
         click.echo("CORRUPTED")
         sys.exit(1)
+
+
+@cli.command()
+@click.option("--lesson", "-L", default=1, type=int, help="Lesson number to start from")
+def tutor(lesson: int) -> None:
+    """Launch interactive tutorial in a sandbox vault."""
+    t = Tutor(lesson_number=lesson)
+    t.run()
 
 
 def main() -> None:
