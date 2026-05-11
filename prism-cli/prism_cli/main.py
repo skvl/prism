@@ -164,7 +164,7 @@ def _find_by_hash(manager: NodeManager, file_hash: str) -> Optional[dict]:
     return None
 
 
-@cli.command()
+@cli.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
 @click.argument("type_name")
 @click.argument("title", default="")
 @click.option("--tag", "-t", "tags", multiple=True, help="Tags to add")
@@ -179,13 +179,10 @@ def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...]) -
     manager = NodeManager(vault.path)
 
     extra_fields: dict[str, str] = {}
-    remaining_args: list[str] = []
-    for arg in sys.argv[sys.argv.index(type_name) + 1:]:
+    for arg in ctx.args:
         if arg.startswith("--") and "=" in arg:
             key, val = arg.lstrip("-").split("=", 1)
             extra_fields[key] = val
-        elif arg.startswith("--") and not arg.startswith("--tag"):
-            remaining_args.append(arg)
 
     click_ctx = click.get_current_context()
     for param, value in click_ctx.params.items():
@@ -249,8 +246,7 @@ def edit(ctx: click.Context, uuid: str) -> None:
     if meta.blob_extension == "md":
         if manager.edit_node_body(meta.uuid):
             from prism.graph.links import LinkExtractor
-            storage_dir = os.path.join(vault.path, ".storage")
-            body_root = os.path.dirname(os.path.dirname(meta_path))
+            body_root = os.path.dirname(meta_path)
             body_path = os.path.join(body_root, f"data.{meta.blob_extension}")
             if os.path.exists(body_path):
                 new_links = LinkExtractor.extract_from_file(body_path)
@@ -539,5 +535,8 @@ def verify(ctx: click.Context, uuid: str) -> None:
         sys.exit(1)
 
 
-if __name__ == "__main__":
+def main() -> None:
     cli()
+
+if __name__ == "__main__":
+    main()
