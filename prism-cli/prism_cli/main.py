@@ -9,7 +9,7 @@ from prism import VERSION
 from prism.vault.vault import Vault, generate_uuid
 from prism.vault.registry import VaultRegistry
 from prism.vault.context import detect_vault
-from prism.node.manager import NodeManager
+from prism.node.manager import NodeManager, resolve_uuid
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import sha256_file
 from prism.graph.links import LinkExtractor, BacklinkIndex, GraphExporter
@@ -219,6 +219,12 @@ def edit(ctx: click.Context, uuid: str) -> None:
         sys.exit(1)
 
     manager = NodeManager(vault.path)
+    try:
+        full_uuid = resolve_uuid(vault.path, uuid)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
     storage_dir = os.path.join(vault.path, ".storage")
     meta_path = None
     for root, _dirs, files in os.walk(storage_dir):
@@ -226,7 +232,7 @@ def edit(ctx: click.Context, uuid: str) -> None:
             if fname == "metadata.toml":
                 try:
                     meta = NodeMetadata.from_toml(os.path.join(root, fname))
-                    if meta.uuid == uuid:
+                    if meta.uuid == full_uuid:
                         meta_path = os.path.join(root, fname)
                         break
                 except Exception:
@@ -308,11 +314,18 @@ def link(ctx: click.Context, source_uuid: str, target_uuid: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
+    try:
+        full_source = resolve_uuid(vault.path, source_uuid)
+        full_target = resolve_uuid(vault.path, target_uuid)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
     manager = NodeManager(vault.path)
     all_nodes = manager.list_nodes()
 
-    source = next((n for n in all_nodes if n.uuid == source_uuid), None)
-    target = next((n for n in all_nodes if n.uuid == target_uuid), None)
+    source = next((n for n in all_nodes if n.uuid == full_source), None)
+    target = next((n for n in all_nodes if n.uuid == full_target), None)
 
     if source is None:
         click.echo(f"Source node not found: {source_uuid}", err=True)
@@ -328,7 +341,7 @@ def link(ctx: click.Context, source_uuid: str, target_uuid: str) -> None:
             if fname == "metadata.toml":
                 try:
                     meta = NodeMetadata.from_toml(os.path.join(root, fname))
-                    if meta.uuid == source_uuid:
+                    if meta.uuid == full_source:
                         meta_path = os.path.join(root, fname)
                         break
                 except Exception:
@@ -355,7 +368,7 @@ def link(ctx: click.Context, source_uuid: str, target_uuid: str) -> None:
     source_meta.links.append(link_entry)
     source_meta.sync_dirty = True
     source_meta.save(meta_path)
-    click.echo(f"Linked {source_uuid[:8]} -> {target_uuid[:8]}")
+    click.echo(f"Linked {full_source[:8]} -> {full_target[:8]}")
 
 
 @cli.command()
@@ -368,8 +381,14 @@ def backlinks(ctx: click.Context, uuid: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
+    try:
+        full_uuid = resolve_uuid(vault.path, uuid)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
     index = BacklinkIndex(vault.path)
-    links = index.get_backlinks(uuid)
+    links = index.get_backlinks(full_uuid)
     if not links:
         click.echo("No backlinks found.")
         return
@@ -498,15 +517,21 @@ def verify(ctx: click.Context, uuid: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
+    try:
+        full_uuid = resolve_uuid(vault.path, uuid)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
     manager = NodeManager(vault.path)
     all_nodes = manager.list_nodes()
-    node = next((n for n in all_nodes if n.uuid == uuid), None)
+    node = next((n for n in all_nodes if n.uuid == full_uuid), None)
 
     if node is None:
         click.echo(f"Node not found: {uuid}", err=True)
         sys.exit(1)
 
-    ok = manager.storage.verify_integrity(uuid, node.blob_sha256)
+    ok = manager.storage.verify_integrity(full_uuid, node.blob_sha256)
     if ok:
         click.echo("OK")
     else:

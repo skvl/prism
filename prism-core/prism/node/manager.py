@@ -14,6 +14,34 @@ from prism.types.validator import FieldValidator
 from prism.vault.vault import generate_uuid
 
 
+def resolve_uuid(vault_path: str, partial: str) -> str:
+    if len(partial) >= 36:
+        return partial
+    nodes = _list_all_nodes(vault_path)
+    matches = [n.uuid for n in nodes if n.uuid.startswith(partial)]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(f"Multiple nodes match partial UUID '{partial}': {[m[:12] for m in matches]}")
+    raise ValueError(f"No node found matching UUID '{partial}'")
+
+
+def _list_all_nodes(vault_path: str) -> list[NodeMetadata]:
+    nodes: list[NodeMetadata] = []
+    storage_dir = os.path.join(vault_path, ".storage")
+    if not os.path.exists(storage_dir):
+        return nodes
+    for root, _dirs, files in os.walk(storage_dir):
+        for fname in files:
+            if fname == "metadata.toml":
+                try:
+                    meta = NodeMetadata.from_toml(os.path.join(root, fname))
+                    nodes.append(meta)
+                except Exception:
+                    continue
+    return nodes
+
+
 class NodeManager:
     def __init__(self, vault_path: str) -> None:
         self.vault_path = vault_path
@@ -21,6 +49,9 @@ class NodeManager:
         self.types_dir = os.path.join(vault_path, ".metadata", "types")
         self.type_loader = TypeLoader(self.types_dir)
         self.index_path = os.path.join(vault_path, ".metadata", "index.txt")
+
+    def _resolve_uuid(self, uid: str) -> str:
+        return resolve_uuid(self.vault_path, uid)
 
     def create_node(
         self,
@@ -85,6 +116,7 @@ class NodeManager:
         return meta
 
     def edit_node_body(self, uid: str) -> bool:
+        uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         meta = NodeMetadata.from_toml(meta_path)
@@ -112,6 +144,7 @@ class NodeManager:
         return True
 
     def edit_node_fields(self, uid: str) -> bool:
+        uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         meta = NodeMetadata.from_toml(meta_path)
@@ -141,6 +174,7 @@ class NodeManager:
         return changed
 
     def delete_node(self, uid: str, force: bool = False) -> bool:
+        uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         if not os.path.exists(storage_dir):
             return False
@@ -161,6 +195,7 @@ class NodeManager:
         return True
 
     def show_node(self, uid: str) -> Optional[str]:
+        uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         if not os.path.exists(meta_path):
@@ -224,6 +259,7 @@ class NodeManager:
                 f.write(f"{uid}\n")
 
     def _find_backlinks(self, uid: str) -> list[dict[str, str]]:
+        uid = self._resolve_uuid(uid)
         result: list[dict[str, str]] = []
         storage_dir = os.path.join(self.vault_path, ".storage")
         if not os.path.exists(storage_dir):
@@ -242,17 +278,4 @@ class NodeManager:
         return result
 
     def list_nodes(self) -> list[NodeMetadata]:
-        nodes: list[NodeMetadata] = []
-        storage_dir = os.path.join(self.vault_path, ".storage")
-        if not os.path.exists(storage_dir):
-            return nodes
-
-        for root, _dirs, files in os.walk(storage_dir):
-            for fname in files:
-                if fname == "metadata.toml":
-                    try:
-                        meta = NodeMetadata.from_toml(os.path.join(root, fname))
-                        nodes.append(meta)
-                    except Exception:
-                        continue
-        return nodes
+        return _list_all_nodes(self.vault_path)
