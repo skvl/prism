@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Optional
 
 import click
@@ -9,10 +10,11 @@ from prism import VERSION
 from prism.vault.vault import Vault, generate_uuid
 from prism.vault.registry import VaultRegistry
 from prism.vault.context import detect_vault
-from prism.node.manager import NodeManager, resolve_uuid
+from prism.node.manager import NodeManager, resolve_uuid, _list_all_nodes
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import sha256_file
 from prism.graph.links import LinkExtractor, BacklinkIndex, GraphExporter
+from prism.path.resolver import PathResolver
 from prism.query.parser import QueryParser
 from prism.query.engine import QueryEngine
 from prism.tracking import ChangeTracker
@@ -60,8 +62,143 @@ def init(ctx: click.Context, path: str) -> None:
         sys.exit(1)
 
 
+@cli.group()
+@click.pass_context
+def path_cmd(ctx: click.Context) -> None:
+    """Manage path hierarchy."""
+
+
+@path_cmd.command()
+@click.argument("path_str")
+@click.pass_context
+def create(ctx: click.Context, path_str: str) -> None:
+    """Create a path segment hierarchy (mkdir -p)."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+    resolver = PathResolver(vault.path)
+    try:
+        leaf_uuid = resolver.resolve_or_create(path_str)
+        click.echo(f"Path created: {path_str}")
+        click.echo(f"Leaf UUID: {leaf_uuid}")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@path_cmd.command()
+@click.argument("path_str")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.pass_context
+def rm(ctx: click.Context, path_str: str, yes: bool) -> None:
+    """Remove a path segment and its subtree."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+    resolver = PathResolver(vault.path)
+    try:
+        leaf_uuid = resolver.resolve(path_str)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    descendants = resolver.collect_descendants(leaf_uuid)
+
+    nodes = _list_all_nodes(vault.path)
+    referencing: set[str] = set()
+    for n in nodes:
+        all_p = [leaf_uuid] + descendants
+        if any(p in n.paths for p in all_p):
+            referencing.add(n.uuid)
+
+    if not yes:
+        msg = f"Remove path '{path_str}'"
+        if descendants:
+            msg += f" ({len(descendants)} descendant segments)"
+        if referencing:
+            msg += f", removed from {len(referencing)} node(s)"
+        msg += ". Continue? [y/N]: "
+        click.echo(msg, nl=False)
+        try:
+            confirm = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            confirm = "n"
+        if confirm != "y":
+            click.echo("Aborted.")
+            return
+
+    all_uuids = [leaf_uuid] + descendants
+    for n in nodes:
+        if any(p in n.paths for p in all_uuids):
+            n.paths = [p for p in n.paths if p not in all_uuids]
+            meta_dir = os.path.dirname(NodeMetadata.metadata_path(
+                compute_storage_path(vault.path, n.uuid)
+            ))
+            n.save(os.path.join(meta_dir, "metadata.toml"))
+
+    for uid in all_uuids:
+        storage_dir = compute_storage_path(vault.path, uid)
+        if os.path.exists(storage_dir):
+            import shutil
+            shutil.rmtree(storage_dir)
+
+    click.echo(f"Removed path: {path_str}")
+
+
+@path_cmd.command()
+@click.argument("path_str", default="")
+@click.pass_context
+def tree(ctx: click.Context, path_str: str) -> None:
+    """Display the path hierarchy as a tree."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+    resolver = PathResolver(vault.path)
+    try:
+        root_uuid = resolver.resolve(path_str if path_str else "/")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    nodes = resolver._all_nodes()
+    nodes_by_uuid = {n.uuid: n for n in nodes}
+
+    def _count_referencing(uuid: str) -> int:
+        return sum(1 for n in nodes if uuid in n.paths)
+
+    def _render(uuid: str, prefix: str = "", is_last: bool = True) -> None:
+        node = nodes_by_uuid.get(uuid)
+        if node is None:
+            return
+        name = node.fields.get("name", node.title or uuid[:8])
+        ref_count = _count_referencing(uuid)
+        suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
+        connector = "└── " if is_last else "├── "
+        click.echo(f"{prefix}{connector}{name}{suffix}")
+        children = sorted(resolver._find_children(uuid, nodes), key=lambda c: c.fields.get("name", ""))
+        child_prefix = prefix + ("    " if is_last else "│   ")
+        for i, child in enumerate(children):
+            _render(child.uuid, child_prefix, i == len(children) - 1)
+
+    root_node = nodes_by_uuid.get(root_uuid)
+    if root_node is None:
+        click.echo("No path found.")
+        return
+
+    name = root_node.fields.get("name", "/")
+    ref_count = _count_referencing(root_uuid)
+    suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
+    click.echo(f"{name}{suffix}")
+    children = sorted(resolver._find_children(root_uuid, nodes), key=lambda c: c.fields.get("name", ""))
+    for i, child in enumerate(children):
+        _render(child.uuid, "", i == len(children) - 1)
+
+
 def _write_builtin_types(vault: Vault) -> None:
-    from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML
+    from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML, PATH_TOML
 
     types_dir = os.path.join(vault.path, ".metadata", "types")
     os.makedirs(types_dir, exist_ok=True)
@@ -71,6 +208,7 @@ def _write_builtin_types(vault: Vault) -> None:
         "contact.toml": CONTACT_TOML,
         "bookmark.toml": BOOKMARK_TOML,
         "file.toml": FILE_TOML,
+        "path.toml": PATH_TOML,
     }
     for fname, content in types.items():
         path = os.path.join(types_dir, fname)
@@ -171,8 +309,9 @@ def _find_by_hash(manager: NodeManager, file_hash: str) -> Optional[dict]:
 @click.argument("type_name")
 @click.argument("title", default="")
 @click.option("--tag", "-t", "tags", multiple=True, help="Tags to add")
+@click.option("--add-path", "-a", "add_path", default=None, help="Associate node with a path")
 @click.pass_context
-def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...]) -> None:
+def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...], add_path: Optional[str]) -> None:
     """Create a new typed node."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
@@ -202,6 +341,31 @@ def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...]) -
             fields=explicit_fields,
             tags=list(tags) if tags else None,
         )
+        if add_path:
+            resolver = PathResolver(vault.path)
+            try:
+                path_uuid = resolver.resolve(add_path)
+            except ValueError:
+                click.echo("Error: Path does not exist", err=True)
+                sys.exit(1)
+            storage_dir = os.path.join(vault.path, ".storage")
+            meta_path = None
+            for root, _dirs, files in os.walk(storage_dir):
+                for fname in files:
+                    if fname == "metadata.toml":
+                        try:
+                            m = NodeMetadata.from_toml(os.path.join(root, fname))
+                            if m.uuid == meta.uuid:
+                                meta_path = os.path.join(root, fname)
+                                break
+                        except Exception:
+                            continue
+                if meta_path:
+                    break
+            if meta_path:
+                meta.paths.append(path_uuid)
+                meta.save(meta_path)
+            click.echo(f"Added path: {add_path}")
         click.echo(f"Created {type_name} node: {meta.uuid}")
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
@@ -210,8 +374,10 @@ def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...]) -
 
 @cli.command()
 @click.argument("uuid")
+@click.option("--add-path", "-a", "add_path", default=None, help="Associate node with a path")
+@click.option("--remove-path", "-r", "remove_path", default=None, help="Remove node from a path")
 @click.pass_context
-def edit(ctx: click.Context, uuid: str) -> None:
+def edit(ctx: click.Context, uuid: str, add_path: Optional[str], remove_path: Optional[str]) -> None:
     """Edit a node's body or fields."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
@@ -245,6 +411,40 @@ def edit(ctx: click.Context, uuid: str) -> None:
         sys.exit(1)
 
     meta = NodeMetadata.from_toml(meta_path)
+
+    resolver = PathResolver(vault.path)
+
+    if add_path is not None:
+        try:
+            path_uuid = resolver.resolve(add_path)
+        except ValueError:
+            click.echo("Error: Path does not exist", err=True)
+            sys.exit(1)
+        if path_uuid not in meta.paths:
+            meta.paths.append(path_uuid)
+            meta.updated_at = datetime.now(timezone.utc).isoformat()
+            meta.sync_dirty = True
+            meta.save(meta_path)
+            click.echo(f"Added path: {add_path}")
+        else:
+            click.echo("Node already associated with this path.")
+        return
+
+    if remove_path is not None:
+        try:
+            path_uuid = resolver.resolve(remove_path)
+        except ValueError:
+            click.echo("Error: Path does not exist", err=True)
+            sys.exit(1)
+        if path_uuid in meta.paths:
+            meta.paths = [p for p in meta.paths if p != path_uuid]
+            meta.updated_at = datetime.now(timezone.utc).isoformat()
+            meta.sync_dirty = True
+            meta.save(meta_path)
+            click.echo(f"Removed path: {remove_path}")
+        else:
+            click.echo("Node not associated with this path.")
+        return
 
     if meta.blob_extension == "md":
         if manager.edit_node_body(meta.uuid):
@@ -398,8 +598,9 @@ def backlinks(ctx: click.Context, uuid: str) -> None:
 
 @cli.command()
 @click.option("--format", "output_format", type=click.Choice(["dot", "json"]), default="dot", help="Graph format")
+@click.option("--include-paths", "-p", is_flag=True, default=False, help="Include path nodes in export")
 @click.pass_context
-def graph(ctx: click.Context, output_format: str) -> None:
+def graph(ctx: click.Context, output_format: str, include_paths: bool) -> None:
     """Export the node graph."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
@@ -411,9 +612,9 @@ def graph(ctx: click.Context, output_format: str) -> None:
     exporter = GraphExporter(vault.path)
 
     if output_format == "dot":
-        click.echo(exporter.export_dot(nodes))
+        click.echo(exporter.export_dot(nodes, include_paths=include_paths))
     else:
-        click.echo(exporter.export_json(nodes))
+        click.echo(exporter.export_json(nodes, include_paths=include_paths))
 
 
 @cli.command()

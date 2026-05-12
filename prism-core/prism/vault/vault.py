@@ -26,11 +26,12 @@ VAULT_TOML_FIELDS = {
 
 
 class Vault:
-    def __init__(self, path: str, vault_uuid: str, schema_version: int, created_at: str) -> None:
+    def __init__(self, path: str, vault_uuid: str, schema_version: int, created_at: str, path_root_uuid: str = "") -> None:
         self.path = path
         self.vault_uuid = vault_uuid
         self.schema_version = schema_version
         self.created_at = created_at
+        self.path_root_uuid = path_root_uuid
 
     @classmethod
     def init(cls, path: str) -> "Vault":
@@ -58,10 +59,29 @@ class Vault:
         doc["created_at"] = now
         doc["prism_version"] = VERSION
 
+        root_uid = str(generate_uuid())
+        doc["path_root_uuid"] = root_uid
+
         with open(vault_toml_path, "w") as f:
             tomlkit.dump(doc, f)
 
-        return cls(str(vault_path), vault_uuid, 1, now)
+        root_storage_dir = storage_dir / uuid_to_path(uuid.UUID(root_uid))
+        root_storage_dir.mkdir(parents=True, exist_ok=True)
+        root_meta = tomlkit.document()
+        root_meta["uuid"] = root_uid
+        root_meta["type"] = "path"
+        root_meta["title"] = "/"
+        root_meta["created_at"] = now
+        root_meta["updated_at"] = now
+        root_meta["sync_dirty"] = True
+        fields_tbl = tomlkit.table()
+        fields_tbl["name"] = "/"
+        root_meta["fields"] = fields_tbl
+        root_meta_path = root_storage_dir / "metadata.toml"
+        with open(root_meta_path, "w") as f:
+            tomlkit.dump(root_meta, f)
+
+        return cls(str(vault_path), vault_uuid, 1, now, path_root_uuid=root_uid)
 
     @classmethod
     def open(cls, path: str) -> "Vault":
@@ -78,6 +98,7 @@ class Vault:
             doc["vault_uuid"],
             doc["schema_version"],
             doc["created_at"],
+            path_root_uuid=doc.get("path_root_uuid", ""),
         )
 
     def validate(self) -> list[str]:

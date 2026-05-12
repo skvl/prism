@@ -6,6 +6,7 @@ from prism.node.manager import NodeManager, resolve_uuid
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import sha256_file
 from prism.graph.links import LinkExtractor, BacklinkIndex, GraphExporter
+from prism.path.resolver import PathResolver
 from prism.query.parser import QueryParser
 from prism.query.engine import QueryEngine
 from prism.tracking import ChangeTracker
@@ -596,9 +597,14 @@ class Repl:
 
         cmd = ALIASES.get(parts[0], parts[0])
 
+        if text.startswith("path:"):
+            return self._complete_path(text)
+
         for i, part in enumerate(parts):
             if part in ("--tag", "-t") and i + 1 >= len(parts):
                 return self._complete_tag(text)
+            if part in ("--add-path", "-a", "--remove-path", "-r") and i + 1 >= len(parts):
+                return self._complete_path(text)
 
         if cmd == "new" and len(parts) <= 2 and text:
             return self._complete_type_name(text)
@@ -647,3 +653,18 @@ class Repl:
         if not text:
             return sorted(tags)
         return sorted(t for t in tags if t.startswith(text))
+
+    def _complete_path(self, text: str) -> list[str]:
+        if self.vault is None:
+            return []
+        path_prefix = text
+        if text.startswith("path:"):
+            path_prefix = text[5:]
+        resolver = PathResolver(self.vault.path)
+        try:
+            completions = resolver.complete(path_prefix)
+        except Exception:
+            return []
+        if text.startswith("path:"):
+            return [f"path:{p}" for p in completions]
+        return completions

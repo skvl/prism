@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+The metadata-graph capability manages directed links between nodes, backlink tracking, and graph export for visualizing the knowledge graph in DOT and JSON formats.
+## Requirements
 ### Requirement: Create explicit link between nodes
 
 The system SHALL support creating a directed link from one node to another.
@@ -46,14 +48,24 @@ The system SHALL track which nodes link to a given node.
 
 The system SHALL export the node graph in standard formats.
 
-#### Scenario: Export DOT format
+#### Scenario: Export DOT format without paths
 - **WHEN** user runs `prism graph --format dot`
 - **THEN** the system SHALL output a DOT graph where nodes are labeled with title + type and edges are directed links
+- **THEN** the output SHALL NOT include nodes of type `path`
 - **THEN** the output SHALL be suitable for rendering with Graphviz
 
-#### Scenario: Export JSON format
+#### Scenario: Export DOT format with paths
+- **WHEN** user runs `prism graph --format dot --include-paths`
+- **THEN** the system SHALL include path nodes and their `path-parent` edges in the DOT output
+
+#### Scenario: Export JSON format without paths
 - **WHEN** user runs `prism graph --format json`
 - **THEN** the system SHALL output a JSON object with `nodes` array (uuid, title, type, tags) and `edges` array (source, target)
+- **THEN** the output SHALL NOT include nodes of type `path`
+
+#### Scenario: Export JSON format with paths
+- **WHEN** user runs `prism graph --format json --include-paths`
+- **THEN** the system SHALL include path nodes and their `path-parent` edges in the JSON output
 
 ### Requirement: Cross-vault lazy link resolution
 
@@ -68,3 +80,17 @@ Links to nodes in other vaults SHALL resolve lazily.
 - **WHEN** vault B is NOT registered
 - **THEN** the link SHALL display as "unresolved link (vault not registered)"
 - **THEN** the system SHALL NOT error — the link is valid but pending
+
+### Requirement: Path hierarchy as graph links
+
+The system SHALL store parent-child relationships between path segments as directed links in the link graph.
+
+#### Scenario: Path-parent link structure
+- **WHEN** a child path segment is created
+- **THEN** the child node's `links` SHALL contain a `path-parent` entry referencing the parent segment UUID
+- **THEN** the parent node SHALL show the child in its backlinks
+
+#### Scenario: Path-parent link not manually editable
+- **WHEN** user runs `prism link <path-uuid> <parent-uuid>`
+- **THEN** the system SHALL NOT create a `path-parent` link (these are managed internally by `prism path create`)
+

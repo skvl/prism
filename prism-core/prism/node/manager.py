@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import StorageEngine, compute_storage_path, sha256_file
+from prism.path.resolver import PathResolver
 from prism.types.loader import TypeLoader
 from prism.types.schema import TypeSchema
 from prism.types.validator import FieldValidator
@@ -61,6 +62,9 @@ class NodeManager:
         blob_path: Optional[str] = None,
         tags: Optional[list[str]] = None,
     ) -> NodeMetadata:
+        if type_name == "path":
+            raise ValueError("Path nodes cannot be created via `prism new`. Use `prism path create` instead.")
+
         schema = self.type_loader.load(type_name)
         if schema is None:
             raise ValueError(f"Unknown type: {type_name}")
@@ -210,6 +214,15 @@ class NodeManager:
             lines.append(f"Title:  {meta.title}")
         if meta.tags:
             lines.append(f"Tags:   {', '.join(meta.tags)}")
+        if meta.paths:
+            resolver = PathResolver(self.vault_path)
+            resolved_paths: list[str] = []
+            for puid in meta.paths:
+                try:
+                    resolved_paths.append(resolver.resolve_uuid_to_path(puid))
+                except Exception:
+                    resolved_paths.append(puid[:8])
+            lines.append(f"Paths:  {', '.join(resolved_paths)}")
         if meta.fields:
             for k, v in meta.fields.items():
                 lines.append(f"  {k}: {v}")

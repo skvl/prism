@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+The blob-storage capability handles importing, storing, and verifying files in the vault's UUID-partitioned storage, supporting both binary and text blobs with SHA-256 integrity verification.
+
+## Requirements
 
 ### Requirement: Import file as blob
 

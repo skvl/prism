@@ -80,7 +80,7 @@ class TestQueryEngine:
         engine = QueryEngine(vault_dir)
         ast = QueryParser().parse("")
         result = engine.execute(ast)
-        assert len(result) == 2
+        assert len(result) == 3
 
     def test_tag_filter(self, vault_dir):
         engine = QueryEngine(vault_dir)
@@ -171,4 +171,4 @@ class TestQueryEngine:
         engine = QueryEngine(vault_dir)
         ast = QueryParser().parse("")
         result = engine.execute(ast)
-        assert len(result) == 2
+        assert len(result) == 3

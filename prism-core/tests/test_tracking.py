@@ -34,8 +34,10 @@ class TestChangeTracker:
 
     def test_status_with_modified_blob(self, vault_dir):
         manager = NodeManager(vault_dir)
-        nodes = manager.list_nodes()
-        storage_dir = compute_storage_path(vault_dir, nodes[0].uuid)
+        nodes = [n for n in manager.list_nodes() if n.type != "path"]
+        assert len(nodes) > 0
+        node = nodes[0]
+        storage_dir = compute_storage_path(vault_dir, node.uuid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         meta = NodeMetadata.from_toml(meta_path)
         meta.blob_mtime = "0"
@@ -47,13 +49,18 @@ class TestChangeTracker:
         status = tracker.status()
         assert len(status["changed"]) > 0
 
-    def test_mark_dirty(self, vault_dir):
+    def _first_user_node(self, vault_dir):
         manager = NodeManager(vault_dir)
-        nodes = manager.list_nodes()
+        nodes = [n for n in manager.list_nodes() if n.type != "path"]
+        return nodes[0] if nodes else None
+
+    def test_mark_dirty(self, vault_dir):
+        node = self._first_user_node(vault_dir)
+        assert node is not None
         tracker = ChangeTracker(vault_dir)
-        tracker.mark_dirty(nodes[0].uuid)
+        tracker.mark_dirty(node.uuid)
         meta = NodeMetadata.from_toml(
-            NodeMetadata.metadata_path(compute_storage_path(vault_dir, nodes[0].uuid))
+            NodeMetadata.metadata_path(compute_storage_path(vault_dir, node.uuid))
         )
         assert meta.sync_dirty is True
 
@@ -62,20 +69,20 @@ class TestChangeTracker:
         tracker.mark_dirty("00000000-0000-0000-0000-000000000000")
 
     def test_update_blob_info(self, vault_dir):
-        manager = NodeManager(vault_dir)
-        nodes = manager.list_nodes()
+        node = self._first_user_node(vault_dir)
+        assert node is not None
         tracker = ChangeTracker(vault_dir)
-        tracker.update_blob_info(nodes[0].uuid)
+        tracker.update_blob_info(node.uuid)
 
     def test_update_blob_info_nonexistent(self, vault_dir):
         tracker = ChangeTracker(vault_dir)
         tracker.update_blob_info("00000000-0000-0000-0000-000000000000")
 
     def test_re_extract_links(self, vault_dir):
-        manager = NodeManager(vault_dir)
-        nodes = manager.list_nodes()
+        node = self._first_user_node(vault_dir)
+        assert node is not None
         tracker = ChangeTracker(vault_dir)
-        result = tracker.re_extract_links(nodes[0].uuid)
+        result = tracker.re_extract_links(node.uuid)
         assert result is True
 
     def test_re_extract_links_nonexistent(self, vault_dir):
@@ -84,11 +91,11 @@ class TestChangeTracker:
         assert result is False
 
     def test_re_extract_links_no_blob(self, vault_dir):
-        manager = NodeManager(vault_dir)
         from prism.types.builtins import CONTACT_TOML
         types_dir = os.path.join(vault_dir, ".metadata", "types")
         with open(os.path.join(types_dir, "contact.toml"), "w") as f:
             f.write(CONTACT_TOML)
+        manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="contact", fields={"name": "No Blob"})
         tracker = ChangeTracker(vault_dir)
         result = tracker.re_extract_links(meta.uuid)

@@ -82,20 +82,22 @@ class GraphExporter:
     def __init__(self, vault_path: str) -> None:
         self.vault_path = vault_path
 
-    def export_dot(self, nodes: list[NodeMetadata]) -> str:
+    def export_dot(self, nodes: list[NodeMetadata], include_paths: bool = False) -> str:
+        filtered = self._filter_nodes(nodes, include_paths)
         lines = ['digraph Prism {', '  rankdir=LR;', '  node [shape=box, style=rounded];']
-        for node in nodes:
+        for node in filtered:
             label = node.title or node.uuid[:8]
             lines.append(f'  "{node.uuid}" [label="{label}\\n({node.type})"];')
-        for node in nodes:
+        for node in filtered:
             for link in node.links:
                 lines.append(f'  "{node.uuid}" -> "{link.get("target", "")}";')
         lines.append('}')
         return "\n".join(lines)
 
-    def export_json(self, nodes: list[NodeMetadata]) -> str:
+    def export_json(self, nodes: list[NodeMetadata], include_paths: bool = False) -> str:
+        filtered = self._filter_nodes(nodes, include_paths)
         export_nodes: list[dict] = []
-        for node in nodes:
+        for node in filtered:
             export_nodes.append({
                 "uuid": node.uuid,
                 "title": node.title,
@@ -104,7 +106,7 @@ class GraphExporter:
             })
 
         export_edges: list[dict] = []
-        for node in nodes:
+        for node in filtered:
             for link in node.links:
                 export_edges.append({
                     "source": node.uuid,
@@ -112,6 +114,12 @@ class GraphExporter:
                 })
 
         return json.dumps({"nodes": export_nodes, "edges": export_edges}, indent=2)
+
+    @staticmethod
+    def _filter_nodes(nodes: list[NodeMetadata], include_paths: bool) -> list[NodeMetadata]:
+        if include_paths:
+            return nodes
+        return [n for n in nodes if n.type != "path"]
 
     @staticmethod
     def resolve_cross_vault_link(vault_uuid: str, target_uuid: str) -> Optional[dict[str, str]]:

@@ -67,3 +67,13 @@ name = "tags"
 type = "array"
 required = false
 '''
+
+PATH_TOML = '''name = "path"
+icon = "📁"
+body_model = "null"
+
+[[fields]]
+name = "name"
+type = "string"
+required = true
+'''

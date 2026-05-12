@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
+from prism.path.resolver import PathResolver
 from prism.query.parser import QueryAST
 
 
@@ -65,6 +66,13 @@ class QueryEngine:
                 return [n for n in nodes if filter_value in n.tags]
             elif filter_type == "type":
                 return [n for n in nodes if n.type == filter_value]
+            elif filter_type == "path":
+                resolver = PathResolver(self.vault_path)
+                try:
+                    leaf_uuid = resolver.resolve(filter_value)
+                except (ValueError, KeyError):
+                    return []
+                return [n for n in nodes if leaf_uuid in n.paths]
         elif "text" in term:
             text = term["text"].lower()
             return [n for n in nodes if self._text_match(n, text)]

@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+The vault-lifecycle capability manages vault initialization, opening, and validation, creating the required directory structure, type schemas, root path node, and configuration metadata.
+## Requirements
 ### Requirement: Initialize vault
 
 The system SHALL create a new vault at a given directory path with the required internal structure.
@@ -46,3 +48,13 @@ The system SHALL allow registering multiple vaults for unified operations.
 #### Scenario: List registered vaults
 - **WHEN** user runs `prism vault list`
 - **THEN** the system SHALL display all registered vaults with their UUIDs, paths, and node counts
+
+### Requirement: Root path node on vault init
+
+The system SHALL create a root path node when initializing a new vault.
+
+#### Scenario: Root node created on init
+- **WHEN** user runs `prism init /path/to/vault`
+- **THEN** the system SHALL create `.storage/<root-uuid>/metadata.toml` with `type = "path"` and `fields.name = "/"` and no parent link
+- **THEN** the system SHALL store the root path node UUID in `.metadata/vault.toml` as `path_root_uuid`
+

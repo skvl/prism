@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+The change-tracking capability monitors node metadata and blob files for modifications, enabling the system to detect changes, re-extract links, and maintain sync state without external indexing.
+
+## Requirements
 
 ### Requirement: Per-node mtime tracking
 

@@ -29,11 +29,15 @@ class QueryParser:
                 i += 1
                 continue
 
-            m = re.match(r'^(tag|type):(.+)$', token)
+            m = re.match(r'^(tag|type|path):(.+)$', token)
             if m:
                 filter_type = m.group(1)
                 filter_value = m.group(2)
-                ast.terms.append({"filter": filter_type, "value": filter_value})
+                if filter_type == "path" and not filter_value.startswith("/"):
+                    print(f"Warning: Paths must start with /. Treating '{token}' as text search.")
+                    ast.terms.append({"text": token})
+                else:
+                    ast.terms.append({"filter": filter_type, "value": filter_value})
                 i += 1
                 continue
 

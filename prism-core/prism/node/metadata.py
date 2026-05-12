@@ -1,4 +1,5 @@
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,12 +8,18 @@ from typing import Any, Optional
 import tomlkit
 
 
+TAG_PATTERN = re.compile(r"\A[\w\-]+\Z")
+
+SEGMENT_PATTERN = re.compile(r"\A[^\x00-\x1f\x7f/]+\Z")
+
+
 @dataclass
 class NodeMetadata:
     uuid: str
     type: str
     title: str = ""
     tags: list[str] = field(default_factory=list)
+    paths: list[str] = field(default_factory=list)
     fields: dict[str, Any] = field(default_factory=dict)
     links: list[dict[str, str]] = field(default_factory=list)
     created_at: str = ""
@@ -23,6 +30,11 @@ class NodeMetadata:
     blob_sha256: str = ""
     sync_dirty: bool = False
 
+    def __post_init__(self) -> None:
+        for tag in self.tags:
+            if not TAG_PATTERN.match(tag):
+                raise ValueError(f"Invalid tag: {tag!r}")
+
     @classmethod
     def from_toml(cls, path: str) -> "NodeMetadata":
         with open(path) as f:
@@ -32,6 +44,7 @@ class NodeMetadata:
             type=doc.get("type", ""),
             title=doc.get("title", ""),
             tags=list(doc.get("tags", [])),
+            paths=list(doc.get("paths", [])),
             fields=dict(doc.get("fields", {})),
             links=list(doc.get("links", [])),
             created_at=doc.get("created_at", ""),
@@ -53,6 +66,11 @@ class NodeMetadata:
             for t in self.tags:
                 arr.append(t)
             doc["tags"] = arr
+        if self.paths:
+            arr = tomlkit.array()
+            for p in self.paths:
+                arr.append(p)
+            doc["paths"] = arr
         if self.fields:
             tbl = tomlkit.table()
             tbl.update(self.fields)

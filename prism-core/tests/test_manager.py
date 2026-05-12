@@ -139,7 +139,7 @@ class TestNodeManager:
         manager.create_node(type_name="note", title="Node 1")
         manager.create_node(type_name="note", title="Node 2")
         nodes = manager.list_nodes()
-        assert len(nodes) == 2
+        assert len(nodes) == 3
 
     def test_rebuild_index(self, vault_dir):
         manager = NodeManager(vault_dir)
@@ -197,10 +197,12 @@ class TestNodeManager:
         try:
             Vault.init(temp_dir)
             manager = NodeManager(temp_dir)
+            nodes = manager.list_nodes()
+            assert any(n.type == "path" for n in nodes)  # root path node created on init
             manager.rebuild_index()
             with open(manager.index_path) as f:
                 content = f.read()
-            assert content == ""
+            assert len(content.strip()) > 0
         finally:
             shutil.rmtree(temp_dir)
 
@@ -230,7 +232,7 @@ class TestNodeManager:
         manager = NodeManager(vault_dir)
         manager.create_node(type_name="note", title="Good Node")
         nodes = manager.list_nodes()
-        assert len(nodes) == 1
+        assert len(nodes) == 2
 
     def test_index_remove_no_index(self, vault_dir):
         manager = NodeManager(vault_dir)

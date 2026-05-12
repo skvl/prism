@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+The type-system capability defines the schema system for typed nodes, shipping with built-in types (note, contact, bookmark, file, path) and a TOML-based type loader with field validation.
+## Requirements
 ### Requirement: Built-in type schemas
 
 The system SHALL ship with four built-in type schemas defined in `.metadata/types/`.
@@ -66,3 +68,14 @@ The system SHALL validate fields against the type schema when creating or editin
 - **WHEN** creating a contact with an undefined field `--favorite-color blue`
 - **THEN** the system SHALL warn: "Unknown field 'favorite_color' for type 'contact'. It will be ignored."
 - **THEN** the system SHALL proceed without including the unknown field
+
+### Requirement: Path type schema
+
+The system SHALL ship with a built-in `path` type schema defined in `.metadata/types/`.
+
+#### Scenario: Path type definition
+- **WHEN** the vault is initialized
+- **THEN** `.metadata/types/path.toml` SHALL exist with fields: `name` (string, required)
+- **THEN** the path type SHALL have `body_model: null` indicating no companion file
+- **THEN** the path type SHALL NOT be creatable via `prism new path` (path nodes are managed by `prism path` subcommands)
+

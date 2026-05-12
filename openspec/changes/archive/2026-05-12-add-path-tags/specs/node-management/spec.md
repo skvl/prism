@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-The node-management capability handles the full lifecycle of typed nodes — creation, editing, deletion, display, and listing — with field validation, tag support, and path association.
-## Requirements
 ### Requirement: Create typed node
 
 The system SHALL create a new node of a specified type with given fields.
@@ -34,21 +32,6 @@ The system SHALL allow editing node metadata fields and note body content.
 - **THEN** the system SHALL display an error: "Path does not exist"
 - **THEN** the system SHALL exit with non-zero status
 
-### Requirement: Delete node
-
-The system SHALL delete a node and its associated files.
-
-#### Scenario: Delete blob node
-- **WHEN** user runs `prism rm <uuid>` with confirmation `--yes`
-- **THEN** the system SHALL remove the entire `.storage/<uuid-partitioned>/` directory
-- **THEN** the system SHALL remove the entry from `.metadata/index.txt`
-- **THEN** the system SHALL rebuild the index
-
-#### Scenario: Delete with pending links
-- **WHEN** user runs `prism rm <uuid>` and other nodes link to this node
-- **THEN** the system SHALL warn: "X nodes link to this node. Links will become unresolved."
-- **THEN** after confirmation, the system SHALL delete the node
-
 ### Requirement: Show node
 
 The system SHALL display a node's metadata and content in a readable format.
@@ -56,4 +39,3 @@ The system SHALL display a node's metadata and content in a readable format.
 #### Scenario: Show note with paths
 - **WHEN** user runs `prism show <note-uuid>` and the node has associated paths
 - **THEN** the system SHALL display the resolved path strings (e.g., `/photos/2026/02/vacations`) in a "Paths" section
-
