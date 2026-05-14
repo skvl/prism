@@ -52,6 +52,18 @@ prism status
 
 # Verify blob integrity
 prism verify <uuid>
+
+# Create a path hierarchy
+prism path create /projects/meeting-notes
+
+# View path tree
+prism path tree
+
+# Create a node at a path
+prism new note "Q1 Planning" --add-path /projects/meeting-notes
+
+# Remove a path
+prism path rm /projects/meeting-notes
 ```
 
 ## Commands
@@ -69,6 +81,9 @@ prism verify <uuid>
 | `prism link <src> <tgt>` | Create a link |
 | `prism backlinks <uuid>` | Show backlinks |
 | `prism graph` | Export the node graph |
+| `prism path create <path>` | Create path segments (mkdir -p) |
+| `prism path rm <path>` | Remove a path and its subtree |
+| `prism path tree [path]` | Display path hierarchy as a tree |
 | `prism query <query>` | Search nodes |
 | `prism status` | Show vault status |
 | `prism verify <uuid>` | Verify blob integrity |
@@ -132,6 +147,18 @@ Nodes are typed objects (notes, contacts, bookmarks, files) stored as UUID-parti
 - **Contact** — Structured fields (name, email, phone, org)
 - **Bookmark** — URL with title and tags
 - **File** — Binary blob with SHA-256 integrity
+- **Path** — Virtual filesystem segment with `path-parent` links
+
+## Path Hierarchy
+
+Prism supports a virtual filesystem hierarchy for organizing nodes. Paths are first-class nodes with CRUD via `prism path` subcommands, supporting tagging, linking, and querying like any other node.
+
+- **Create** — `prism path create /projects/notes` creates segments recursively (mkdir -p semantics)
+- **Associate** — `prism new note "Title" --add-path /projects/notes` or `prism edit <uuid> --add-path /projects/notes`
+- **Remove association** — `prism edit <uuid> --remove-path /projects/notes` (path node itself is not deleted)
+- **Browse** — `prism path tree` shows the full hierarchy; `prism path tree /projects` shows a subtree
+- **Delete** — `prism path rm /projects` removes the segment and all descendants, cleaning up node references
+- **Multiple paths** — a node can belong to many paths; querying any path returns it
 
 ## Type System
 
