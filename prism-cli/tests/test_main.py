@@ -21,12 +21,13 @@ def vault_dir():
     d = tempfile.mkdtemp()
     Vault.init(d)
     types_dir = os.path.join(d, ".metadata", "types")
-    from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML
+    from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
     for fname, content in [
         ("note.toml", NOTE_TOML),
         ("contact.toml", CONTACT_TOML),
         ("bookmark.toml", BOOKMARK_TOML),
         ("file.toml", FILE_TOML),
+        ("path.toml", PATH_TOML),
     ]:
         with open(os.path.join(types_dir, fname), "w") as f:
             f.write(content)
@@ -72,8 +73,9 @@ class TestCliGroup:
         result = runner.invoke(cli, ["--vault", vault_dir, "--verbose", "status"])
         assert result.exit_code == 0
 
-    def test_no_vault_detected(self, runner):
+    def test_no_vault_detected(self, runner, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
             result = runner.invoke(cli, ["status"])
             assert result.exit_code == 1
             assert "No vault found" in result.output
@@ -131,10 +133,12 @@ class TestVaultCommands:
 # ── Add-File ───────────────────────────────────────────────────────────
 
 class TestAddFileCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["add-file", "/some/file"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["add-file", "/some/file"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_file_not_found(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "add-file", "/nonexistent/file.txt"])
@@ -186,10 +190,12 @@ class TestAddFileCommand:
 # ── New ────────────────────────────────────────────────────────────────
 
 class TestNewCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["new", "note", "Title"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["new", "note", "Title"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_new_note(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "new", "note", "My Note"])
@@ -223,14 +229,23 @@ class TestNewCommand:
         assert result.exit_code == 0
         assert "Created contact node:" in result.output
 
+    def test_new_with_add_path(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/misc"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "new", "note", "Path Note", "--add-path", "/misc"])
+        assert result.exit_code == 0
+        assert "Created note node:" in result.output
+        assert "Added path: /misc" in result.output
+
 
 # ── Edit ───────────────────────────────────────────────────────────────
 
 class TestEditCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["edit", "some-uuid"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["edit", "some-uuid"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_resolve_error(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "edit", "nonexistent"])
@@ -306,14 +321,50 @@ class TestEditCommand:
         assert result.exit_code == 0
         assert "Body updated." in result.output
 
+    def test_edit_add_path(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/test"])
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Edit")
+        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
+        assert result.exit_code == 0
+        assert "Added path: /test" in result.output
+
+    def test_edit_add_path_already_exists(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/test"])
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Edit Dup")
+        runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
+        assert result.exit_code == 0
+        assert "already associated" in result.output or "already" in result.output
+
+    def test_edit_remove_path(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/test"])
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Rm")
+        runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"])
+        assert result.exit_code == 0
+        assert "Removed path: /test" in result.output
+
+    def test_edit_remove_path_not_associated(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/test"])
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Not Assoc")
+        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"])
+        assert result.exit_code == 0
+        assert "not associated" in result.output
+
 
 # ── Rm ─────────────────────────────────────────────────────────────────
 
 class TestRmCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["rm", "some-uuid"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["rm", "some-uuid"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_success(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
@@ -333,10 +384,12 @@ class TestRmCommand:
 # ── Show ───────────────────────────────────────────────────────────────
 
 class TestShowCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["show", "some-uuid"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["show", "some-uuid"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_success(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
@@ -356,10 +409,12 @@ class TestShowCommand:
 # ── Link ───────────────────────────────────────────────────────────────
 
 class TestLinkCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["link", "src", "tgt"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["link", "src", "tgt"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_resolve_error(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "link", "nonexistent", "other"])
@@ -418,10 +473,12 @@ class TestLinkCommand:
 # ── Backlinks ──────────────────────────────────────────────────────────
 
 class TestBacklinksCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["backlinks", "some-uuid"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["backlinks", "some-uuid"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_resolve_error(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "backlinks", "nonexistent"])
@@ -448,13 +505,56 @@ class TestBacklinksCommand:
         assert "Source" in result.output
 
 
+# ── Path Commands ──────────────────────────────────────────────────────
+
+class TestPathCommands:
+    def test_path_create(self, runner, vault_dir):
+        result = runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/foo/bar"])
+        assert result.exit_code == 0
+        assert "Path created: /foo/bar" in result.output
+
+    def test_path_rm(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/foo/bar"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "path", "rm", "/foo/bar", "--yes"])
+        assert result.exit_code == 0
+        assert "Removed path: /foo/bar" in result.output
+
+    def test_path_tree(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/foo/bar"])
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/foo/baz"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "path", "tree"])
+        assert result.exit_code == 0
+        assert "foo" in result.output
+
+    def test_path_create_invalid(self, runner, vault_dir):
+        result = runner.invoke(cli, ["--vault", vault_dir, "path", "create", ""])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_path_rm_nonexistent(self, runner, vault_dir):
+        result = runner.invoke(cli, ["--vault", vault_dir, "path", "rm", "/nonexistent", "--yes"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_path_tree_empty(self, runner, vault_dir):
+        result = runner.invoke(cli, ["--vault", vault_dir, "path", "tree"])
+        assert result.exit_code == 0
+
+    def test_path_tree_nonexistent(self, runner, vault_dir):
+        result = runner.invoke(cli, ["--vault", vault_dir, "path", "tree", "/nonexistent"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+
 # ── Graph ──────────────────────────────────────────────────────────────
 
 class TestGraphCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["graph"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["graph"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_dot_format(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
@@ -478,14 +578,34 @@ class TestGraphCommand:
         assert result.exit_code == 0
         assert "digraph" in result.output
 
+    def test_graph_with_include_paths(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/foo"])
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="Graph Path")
+        result = runner.invoke(cli, ["--vault", vault_dir, "graph", "--include-paths"])
+        assert result.exit_code == 0
+        assert "digraph" in result.output
+
+    def test_graph_json_include_paths(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/foo"])
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="Graph JSON Path")
+        result = runner.invoke(cli, ["--vault", vault_dir, "graph", "--format", "json", "--include-paths"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "nodes" in data
+        assert "edges" in data
+
 
 # ── Query ──────────────────────────────────────────────────────────────
 
 class TestQueryCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["query", "tag:test"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["query", "tag:test"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_no_results(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "query", "tag:nonexistent"])
@@ -528,10 +648,12 @@ class TestQueryCommand:
 # ── Status ─────────────────────────────────────────────────────────────
 
 class TestStatusCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["status"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["status"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_clean(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "status"])
@@ -593,10 +715,12 @@ class TestStatusCommand:
 # ── Verify ─────────────────────────────────────────────────────────────
 
 class TestVerifyCommand:
-    def test_no_vault(self, runner):
-        result = runner.invoke(cli, ["verify", "some-uuid"])
-        assert result.exit_code == 1
-        assert "No vault found" in result.output
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["verify", "some-uuid"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
 
     def test_resolve_error(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "verify", "nonexistent"])

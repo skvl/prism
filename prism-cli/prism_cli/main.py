@@ -11,7 +11,7 @@ from prism.vault.registry import VaultRegistry
 from prism.vault.context import detect_vault
 from prism.node.manager import NodeManager, resolve_uuid, _list_all_nodes
 from prism.node.metadata import NodeMetadata
-from prism.node.storage import sha256_file
+from prism.node.storage import compute_storage_path, sha256_file
 from prism.graph.links import BacklinkIndex, GraphExporter
 from prism.path.resolver import PathResolver
 from prism.query.parser import QueryParser

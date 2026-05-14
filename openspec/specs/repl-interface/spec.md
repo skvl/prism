@@ -5,6 +5,8 @@ The repl-interface capability provides a persistent, stateful REPL session for t
 ### Requirement: REPL entry command
 
 The system SHALL provide a `prism repl` command that enters an interactive REPL session.
+The Repl class SHALL accept optional `input_stream` and `output_stream` parameters
+(defaulting to `sys.stdin` and `sys.stdout`) for testability.
 
 #### Scenario: Launch REPL inside a vault directory
 - **WHEN** user runs `prism repl` inside a vault directory
@@ -23,6 +25,12 @@ The system SHALL provide a `prism repl` command that enters an interactive REPL 
 - **WHEN** user runs `prism repl --vault /path/to/vault`
 - **THEN** the system SHALL connect to the specified vault
 - **THEN** the system SHALL enter full REPL mode
+
+#### Scenario: REPL with custom I/O streams (test mode)
+- **WHEN** `Repl(input_stream=io.StringIO("exit\n"), output_stream=io.StringIO())` is constructed
+- **THEN** the REPL SHALL read commands from `input_stream` and write output to `output_stream`
+- **THEN** the REPL SHALL process the "exit" command and terminate
+- **THEN** no output SHALL appear on stdout
 
 ### Requirement: Exit REPL
 
