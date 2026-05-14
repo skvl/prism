@@ -5,7 +5,9 @@ import tempfile
 import pytest
 
 from prism.vault.vault import Vault
-from prism_cli.repl import Repl, _write_builtin_types
+from prism_cli import commands
+from prism_cli import completions
+from prism_cli.repl import ALIASES, Repl
 
 
 class TestReplDegradedMode:
@@ -31,7 +33,7 @@ class TestReplDegradedMode:
         d = tempfile.mkdtemp()
         try:
             vault = Vault.init(d)
-            _write_builtin_types(vault)
+            commands.write_builtin_types(vault)
             repl._handle_line(f"open {d}")
             assert repl.vault is not None
             assert repl.vault.vault_uuid == vault.vault_uuid
@@ -60,7 +62,7 @@ class TestReplFullMode:
     def vault(self):
         d = tempfile.mkdtemp()
         vault = Vault.init(d)
-        _write_builtin_types(vault)
+        commands.write_builtin_types(vault)
         yield vault
         shutil.rmtree(d)
 
@@ -189,14 +191,12 @@ class TestReplFullMode:
 
 class TestReplCompletion:
     def test_command_completion_partial(self):
-        repl = Repl(vault=None)
-        cmds = repl._complete_command("n")
+        cmds = completions.complete_command("n", ALIASES)
         assert "n" in cmds
         assert "new" in cmds
 
     def test_command_completion_empty(self):
-        repl = Repl(vault=None)
-        cmds = repl._complete_command("")
+        cmds = completions.complete_command("", ALIASES)
         assert "new" in cmds
         assert "help" in cmds
         assert "exit" in cmds
@@ -205,12 +205,12 @@ class TestReplCompletion:
         d = tempfile.mkdtemp()
         try:
             vault = Vault.init(d)
-            _write_builtin_types(vault)
+            commands.write_builtin_types(vault)
             repl = Repl(vault=vault)
             repl._handle_line("new note UUIDComplete")
             uid = repl.last_uuid
             assert uid is not None
-            matches = repl._complete_uuid(uid[:8])
+            matches = completions.complete_uuid(vault, uid[:8])
             assert any(uid in m for m in matches)
         finally:
             shutil.rmtree(d)
@@ -219,29 +219,26 @@ class TestReplCompletion:
         d = tempfile.mkdtemp()
         try:
             vault = Vault.init(d)
-            _write_builtin_types(vault)
-            repl = Repl(vault=vault)
-            names = repl._complete_type_name("n")
+            commands.write_builtin_types(vault)
+            names = completions.complete_type_name(vault, "n")
             assert "note" in names
         finally:
             shutil.rmtree(d)
 
     def test_uuid_completion_no_vault_returns_empty(self):
-        repl = Repl(vault=None)
-        assert repl._complete_uuid("") == []
+        assert completions.complete_uuid(None, "") == []
 
     def test_type_name_completion_no_vault_returns_empty(self):
-        repl = Repl(vault=None)
-        assert repl._complete_type_name("") == []
+        assert completions.complete_type_name(None, "") == []
 
     def test_tag_completion(self):
         d = tempfile.mkdtemp()
         try:
             vault = Vault.init(d)
-            _write_builtin_types(vault)
+            commands.write_builtin_types(vault)
             repl = Repl(vault=vault)
             repl._handle_line("new note TagTest --tag hello-tag")
-            tags = repl._complete_tag("hel")
+            tags = completions.complete_tag(vault, "hel")
             assert "hello-tag" in tags
         finally:
             shutil.rmtree(d)

@@ -13,7 +13,8 @@ from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.vault.vault import Vault
-from prism_cli.main import _find_by_hash, _write_builtin_types, cli
+from prism_cli import commands
+from prism_cli.main import cli
 
 
 @pytest.fixture
@@ -935,28 +936,28 @@ class TestHelperFunctions:
         with open(file_path, "w") as f:
             f.write("test content for hash")
         meta = manager.create_node(type_name="note", title="Hash Test", blob_path=file_path)
-        result = _find_by_hash(manager, meta.blob_sha256)
-        assert result is not None
-        assert result["uuid"] == meta.uuid
-        assert result["title"] == meta.title
+        result = commands.find_by_hash(manager, meta.blob_sha256)
+        assert result.ok
+        assert result.data["uuid"] == meta.uuid
+        assert result.data["title"] == meta.title
 
     def test_find_by_hash_not_found(self, vault_dir):
         manager = NodeManager(vault_dir)
-        result = _find_by_hash(manager, "nonexistent-hash-1234567890")
-        assert result is None
+        result = commands.find_by_hash(manager, "nonexistent-hash-1234567890")
+        assert not result.ok
 
     def test_write_builtin_types_creates_files(self, vault_dir):
         types_dir = os.path.join(vault_dir, ".metadata", "types")
         for f in os.listdir(types_dir):
             os.unlink(os.path.join(types_dir, f))
         vault = Vault.open(vault_dir)
-        _write_builtin_types(vault)
+        commands.write_builtin_types(vault)
         for tname in ("note.toml", "contact.toml", "bookmark.toml", "file.toml"):
             assert os.path.exists(os.path.join(types_dir, tname))
 
     def test_write_builtin_types_skips_existing(self, vault_dir):
         vault = Vault.open(vault_dir)
-        _write_builtin_types(vault)
+        commands.write_builtin_types(vault)
         types_dir = os.path.join(vault_dir, ".metadata", "types")
         for tname in ("note.toml", "contact.toml", "bookmark.toml", "file.toml"):
             assert os.path.exists(os.path.join(types_dir, tname))

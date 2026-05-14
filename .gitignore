@@ -47,3 +47,6 @@ Thumbs.db
 
 # pip
 pip-wheel-metadata/
+
+# Temporary folders
+.tmp

@@ -11,7 +11,7 @@ from prism.node.storage import compute_storage_path, sha256_file
 from prism.vault.vault import Vault
 
 from prism_cli.tutor import Lesson, Step, StepResult, TOTAL_LESSONS, Tutor
-from prism_cli.main import _write_builtin_types
+from prism_cli import commands
 
 
 class TestDataModel:
@@ -55,7 +55,7 @@ class TestVerifyHelpers:
         t = Tutor()
         t.temp_dir = tempfile.mkdtemp(prefix="prism-tutor-test-")
         vault = Vault.init(t.temp_dir)
-        _write_builtin_types(vault)
+        commands.write_builtin_types(vault)
         t.vault = vault
         yield t
         shutil.rmtree(t.temp_dir)
@@ -209,7 +209,7 @@ class TestUuidCapture:
         t.temp_dir = tempfile.mkdtemp(prefix="prism-tutor-test-")
         try:
             vault = Vault.init(t.temp_dir)
-            _write_builtin_types(vault)
+            commands.write_builtin_types(vault)
             t.vault = vault
             manager = NodeManager(vault.path)
             meta = manager.create_node(type_name="note", title="My note")

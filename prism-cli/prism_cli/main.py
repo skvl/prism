@@ -1,23 +1,19 @@
 import json
 import os
+import subprocess
 import sys
 from typing import Optional
 
 import click
 
 from prism import VERSION
-from prism.vault.vault import Vault, generate_uuid
-from prism.vault.registry import VaultRegistry
-from prism.vault.context import detect_vault
-from prism.node.manager import NodeManager, resolve_uuid, _list_all_nodes
-from prism.node.metadata import NodeMetadata
-from prism.node.storage import compute_storage_path, sha256_file
-from prism.graph.links import BacklinkIndex, GraphExporter
+from prism.node.manager import NodeManager, resolve_uuid
+from prism.node.storage import sha256_file
 from prism.path.resolver import PathResolver
-from prism.query.parser import QueryParser
-from prism.query.engine import QueryEngine
-from prism.tracking import ChangeTracker
+from prism.vault.vault import Vault
+from prism.vault.context import detect_vault
 
+from . import commands
 from .repl import Repl
 from .tutor import Tutor
 
@@ -51,13 +47,12 @@ def cli(ctx: click.Context, vault: Optional[str], verbose: bool, output_format: 
 @click.pass_context
 def init(ctx: click.Context, path: str) -> None:
     """Initialize a new vault at PATH."""
-    try:
-        vault = Vault.init(path)
-        _write_builtin_types(vault)
-        click.echo(f"Vault initialized at {vault.path}")
-        click.echo(f"Vault UUID: {vault.vault_uuid}")
-    except FileExistsError as e:
-        click.echo(f"Error: {e}", err=True)
+    result = commands.init_vault(path)
+    if result.ok:
+        click.echo(f"Vault initialized at {result.data['path']}")
+        click.echo(f"Vault UUID: {result.data['vault_uuid']}")
+    else:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
 
 
@@ -76,13 +71,12 @@ def create(ctx: click.Context, path_str: str) -> None:
     if vault is None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
-    resolver = PathResolver(vault.path)
-    try:
-        leaf_uuid = resolver.resolve_or_create(path_str)
+    result = commands.manage_paths(vault, "create", path_str)
+    if result.ok:
         click.echo(f"Path created: {path_str}")
-        click.echo(f"Leaf UUID: {leaf_uuid}")
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Leaf UUID: {result.data['leaf_uuid']}")
+    else:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
 
 
@@ -104,12 +98,13 @@ def rm(ctx: click.Context, path_str: str, yes: bool) -> None:
         sys.exit(1)
 
     descendants = resolver.collect_descendants(leaf_uuid)
+    all_uuids = [leaf_uuid] + descendants
 
-    nodes = _list_all_nodes(vault.path)
+    manager = NodeManager(vault.path)
+    nodes = manager.list_nodes()
     referencing: set[str] = set()
     for n in nodes:
-        all_p = [leaf_uuid] + descendants
-        if any(p in n.paths for p in all_p):
+        if any(p in n.paths for p in all_uuids):
             referencing.add(n.uuid)
 
     if not yes:
@@ -128,22 +123,12 @@ def rm(ctx: click.Context, path_str: str, yes: bool) -> None:
             click.echo("Aborted.")
             return
 
-    all_uuids = [leaf_uuid] + descendants
-    for n in nodes:
-        if any(p in n.paths for p in all_uuids):
-            n.paths = [p for p in n.paths if p not in all_uuids]
-            meta_dir = os.path.dirname(NodeMetadata.metadata_path(
-                compute_storage_path(vault.path, n.uuid)
-            ))
-            n.save(os.path.join(meta_dir, "metadata.toml"))
-
-    for uid in all_uuids:
-        storage_dir = compute_storage_path(vault.path, uid)
-        if os.path.exists(storage_dir):
-            import shutil
-            shutil.rmtree(storage_dir)
-
-    click.echo(f"Removed path: {path_str}")
+    result = commands.manage_paths(vault, "rm", path_str)
+    if result.ok:
+        click.echo(f"Removed path: {path_str}")
+    else:
+        click.echo(f"Error: {result.error}", err=True)
+        sys.exit(1)
 
 
 @path_cmd.command()
@@ -155,45 +140,31 @@ def tree(ctx: click.Context, path_str: str) -> None:
     if vault is None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
-    resolver = PathResolver(vault.path)
-    try:
-        root_uuid = resolver.resolve(path_str if path_str else "/")
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
+
+    result = commands.manage_paths(vault, "tree", path_str)
+    if not result.ok:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
 
-    nodes = resolver._all_nodes()
-    nodes_by_uuid = {n.uuid: n for n in nodes}
-
-    def _count_referencing(uuid: str) -> int:
-        return sum(1 for n in nodes if uuid in n.paths)
-
-    def _render(uuid: str, prefix: str = "", is_last: bool = True) -> None:
-        node = nodes_by_uuid.get(uuid)
-        if node is None:
-            return
-        name = node.fields.get("name", node.title or uuid[:8])
-        ref_count = _count_referencing(uuid)
-        suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
-        connector = "└── " if is_last else "├── "
-        click.echo(f"{prefix}{connector}{name}{suffix}")
-        children = sorted(resolver._find_children(uuid, nodes), key=lambda c: c.fields.get("name", ""))
-        child_prefix = prefix + ("    " if is_last else "│   ")
-        for i, child in enumerate(children):
-            _render(child.uuid, child_prefix, i == len(children) - 1)
-
-    root_node = nodes_by_uuid.get(root_uuid)
-    if root_node is None:
+    tree_data = result.data.get("tree")
+    if tree_data is None:
         click.echo("No path found.")
         return
 
-    name = root_node.fields.get("name", "/")
-    ref_count = _count_referencing(root_uuid)
-    suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
-    click.echo(f"{name}{suffix}")
-    children = sorted(resolver._find_children(root_uuid, nodes), key=lambda c: c.fields.get("name", ""))
-    for i, child in enumerate(children):
-        _render(child.uuid, "", i == len(children) - 1)
+    def _render(node: dict, prefix: str = "", is_last: bool = True) -> None:
+        name = node.get("name", node.get("uuid", "")[:8])
+        ref_count = node.get("ref_count", 0)
+        suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
+        connector = "└── " if is_last else "├── "
+        click.echo(f"{prefix}{connector}{name}{suffix}")
+        children = node.get("children", [])
+        child_prefix = prefix + ("    " if is_last else "│   ")
+        for i, child in enumerate(children):
+            _render(child, child_prefix, i == len(children) - 1)
+
+    click.echo(f"{tree_data['name']}{' (' + str(tree_data['ref_count']) + ' nodes)' if tree_data['ref_count'] > 0 else ''}")
+    for i, child in enumerate(tree_data.get("children", [])):
+        _render(child, "", i == len(tree_data["children"]) - 1)
 
 
 @cli.group()
@@ -212,22 +183,17 @@ def add(ctx: click.Context, uuid: str, tags: tuple[str, ...]) -> None:
     if vault is None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
-
-    manager = NodeManager(vault.path)
-    try:
-        full_uuid = resolve_uuid(vault.path, uuid)
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
+    result = commands.manage_tags(vault, "add", uuid, list(tags))
+    if not result.ok:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
-
-    for tag_str in tags:
-        try:
-            if manager.add_tag(full_uuid, tag_str):
-                click.echo(f"Added tag: {tag_str}")
-            else:
-                click.echo(f"Tag already present: {tag_str}")
-        except ValueError as e:
-            click.echo(f"Error: {e}", err=True)
+    for r in result.data.get("results", []):
+        if r["status"] == "added":
+            click.echo(f"Added tag: {r['tag']}")
+        elif r["status"] == "already_present":
+            click.echo(f"Tag already present: {r['tag']}")
+        elif r["status"] == "error":
+            click.echo(f"Error: {r['error']}", err=True)
             sys.exit(1)
 
 
@@ -241,19 +207,15 @@ def rm(ctx: click.Context, uuid: str, tags: tuple[str, ...]) -> None:
     if vault is None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
-
-    manager = NodeManager(vault.path)
-    try:
-        full_uuid = resolve_uuid(vault.path, uuid)
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
+    result = commands.manage_tags(vault, "rm", uuid, list(tags))
+    if not result.ok:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
-
-    for tag_str in tags:
-        if manager.remove_tag(full_uuid, tag_str):
-            click.echo(f"Removed tag: {tag_str}")
-        else:
-            click.echo(f"Tag not present: {tag_str}")
+    for r in result.data.get("results", []):
+        if r["status"] == "removed":
+            click.echo(f"Removed tag: {r['tag']}")
+        elif r["status"] == "not_present":
+            click.echo(f"Tag not present: {r['tag']}")
 
 
 @tag.command("list")
@@ -265,13 +227,10 @@ def list_tags(ctx: click.Context, count: bool) -> None:
     if vault is None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
-
-    manager = NodeManager(vault.path)
-    tags_dict = manager.list_tags()
-
+    result = commands.manage_tags(vault, "list")
+    tags_dict = result.data.get("tags", {})
     if not tags_dict:
         return
-
     for tag_name, tag_count in tags_dict.items():
         if count:
             click.echo(f"{tag_name} ({tag_count})")
@@ -289,34 +248,13 @@ def rename(ctx: click.Context, old_tag: str, new_tag: str) -> None:
     if vault is None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
-
-    manager = NodeManager(vault.path)
-    try:
-        affected = manager.rename_tag(old_tag, new_tag)
+    result = commands.manage_tags(vault, "rename", tags=[old_tag, new_tag])
+    if result.ok:
+        affected = result.data["affected"]
         click.echo(f"Renamed tag '{old_tag}' to '{new_tag}' across {affected} node(s)")
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
+    else:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
-
-
-def _write_builtin_types(vault: Vault) -> None:
-    from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML, PATH_TOML
-
-    types_dir = os.path.join(vault.path, ".metadata", "types")
-    os.makedirs(types_dir, exist_ok=True)
-
-    types = {
-        "note.toml": NOTE_TOML,
-        "contact.toml": CONTACT_TOML,
-        "bookmark.toml": BOOKMARK_TOML,
-        "file.toml": FILE_TOML,
-        "path.toml": PATH_TOML,
-    }
-    for fname, content in types.items():
-        path = os.path.join(types_dir, fname)
-        if not os.path.exists(path):
-            with open(path, "w") as f:
-                f.write(content)
 
 
 @cli.group()
@@ -330,23 +268,20 @@ def vault(ctx: click.Context) -> None:
 @click.pass_context
 def add(ctx: click.Context, path: str) -> None:
     """Register an existing vault."""
-    try:
-        v = Vault.open(path)
-    except FileNotFoundError as e:
-        click.echo(f"Error: {e}", err=True)
+    result = commands.add_vault(path)
+    if result.ok:
+        click.echo(f"Vault {result.data['uuid'][:8]} registered at {result.data['path']}")
+    else:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
-
-    registry = VaultRegistry()
-    registry.add(v.vault_uuid, v.path)
-    click.echo(f"Vault {v.vault_uuid[:8]} registered at {v.path}")
 
 
 @vault.command()
 @click.pass_context
 def list_vaults(ctx: click.Context) -> None:
     """List registered vaults."""
-    registry = VaultRegistry()
-    vaults = registry.list()
+    result = commands.list_vaults()
+    vaults = result.data.get("vaults", [])
     if not vaults:
         click.echo("No vaults registered.")
         return
@@ -377,12 +312,9 @@ def add_file(ctx: click.Context, source_path: str, type_name: Optional[str]) -> 
         click.echo(f"File not found: {source_path}", err=True)
         sys.exit(1)
 
-    file_hash = sha256_file(source_path)
-    manager = NodeManager(vault.path)
-
-    existing = _find_by_hash(manager, file_hash)
-    if existing:
-        click.echo(f"File already exists as node {existing['uuid']}")
+    result = commands.import_file(vault, source_path, type_name)
+    if result.code == "ALREADY_EXISTS":
+        click.echo(f"File already exists as node {result.data['uuid']}")
         click.echo("Create a second reference? [y/N]: ", nl=False)
         try:
             confirm = input().strip().lower()
@@ -390,21 +322,13 @@ def add_file(ctx: click.Context, source_path: str, type_name: Optional[str]) -> 
             confirm = "n"
         if confirm != "y":
             return
+        result = commands.import_file(vault, source_path, type_name, force=True)
 
-    actual_type = type_name or "file"
-    meta = manager.create_node(
-        type_name=actual_type,
-        title=os.path.basename(source_path),
-        blob_path=source_path,
-    )
-    click.echo(f"Imported as node {meta.uuid}")
-
-
-def _find_by_hash(manager: NodeManager, file_hash: str) -> Optional[dict]:
-    for node in manager.list_nodes():
-        if node.blob_sha256 == file_hash:
-            return {"uuid": node.uuid, "title": node.title}
-    return None
+    if result.ok:
+        click.echo(f"Imported as node {result.data['uuid']}")
+    else:
+        click.echo(f"Error: {result.error}", err=True)
+        sys.exit(1)
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
@@ -420,8 +344,6 @@ def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...], a
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    manager = NodeManager(vault.path)
-
     extra_fields: dict[str, str] = {}
     for arg in ctx.args:
         if arg.startswith("--") and "=" in arg:
@@ -436,42 +358,45 @@ def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...], a
     explicit_fields: dict[str, object] = {}
     explicit_fields.update(extra_fields)
 
-    try:
-        meta = manager.create_node(
-            type_name=type_name,
-            title=title,
-            fields=explicit_fields,
-            tags=list(tags) if tags else None,
-        )
-        if add_path:
-            resolver = PathResolver(vault.path)
-            try:
-                path_uuid = resolver.resolve(add_path)
-            except ValueError:
-                click.echo("Error: Path does not exist", err=True)
-                sys.exit(1)
-            storage_dir = os.path.join(vault.path, ".storage")
-            meta_path = None
-            for root, _dirs, files in os.walk(storage_dir):
-                for fname in files:
-                    if fname == "metadata.toml":
-                        try:
-                            m = NodeMetadata.from_toml(os.path.join(root, fname))
-                            if m.uuid == meta.uuid:
-                                meta_path = os.path.join(root, fname)
-                                break
-                        except Exception:
-                            continue
-                if meta_path:
-                    break
-            if meta_path:
-                meta.paths.append(path_uuid)
-                meta.save(meta_path)
-            click.echo(f"Added path: {add_path}")
+    result = commands.create_node(
+        vault, type_name, title,
+        fields=explicit_fields,
+        tags=list(tags) if tags else None,
+        add_path=add_path,
+    )
+    if result.ok:
+        meta = result.data["meta"]
+        if result.data.get("path_added"):
+            click.echo(f"Added path: {result.data['path_added']}")
+        elif "warning" in result.data:
+            click.echo(f"Path does not exist: {add_path}")
+            # Still return success - the node was created
         click.echo(f"Created {type_name} node: {meta.uuid}")
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
+    else:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
+
+
+def _do_edit_path_ops(vault: Vault, uuid: str, add_path: Optional[str], remove_path: Optional[str]) -> bool:
+    """Handle add/remove path operations. Returns True if a path op was handled."""
+    if add_path is not None or remove_path is not None:
+        result = commands.edit_node(vault, uuid, add_path=add_path, remove_path=remove_path)
+        if result.ok:
+            action = result.data.get("action", "")
+            path = result.data.get("path", "")
+            if action == "add_path":
+                click.echo(f"Added path: {path}")
+            elif action == "add_path_skipped":
+                click.echo("Node already associated with this path.")
+            elif action == "remove_path":
+                click.echo(f"Removed path: {path}")
+            elif action == "remove_path_skipped":
+                click.echo("Node not associated with this path.")
+        else:
+            click.echo(f"Error: {result.error}", err=True)
+            sys.exit(1)
+        return True
+    return False
 
 
 @cli.command()
@@ -486,44 +411,20 @@ def edit(ctx: click.Context, uuid: str, add_path: Optional[str], remove_path: Op
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    manager = NodeManager(vault.path)
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
-    if add_path is not None:
-        try:
-            if manager.add_path_to_node(full_uuid, add_path):
-                click.echo(f"Added path: {add_path}")
-            else:
-                click.echo("Node already associated with this path.")
-        except ValueError as e:
-            click.echo(f"Error: {e}", err=True)
-            sys.exit(1)
+    if _do_edit_path_ops(vault, full_uuid, add_path, remove_path):
         return
 
-    if remove_path is not None:
-        try:
-            if manager.remove_path_from_node(full_uuid, remove_path):
-                click.echo(f"Removed path: {remove_path}")
-            else:
-                click.echo("Node not associated with this path.")
-        except ValueError as e:
-            click.echo(f"Error: {e}", err=True)
-            sys.exit(1)
-        return
-
-    try:
-        body_info = manager.get_body_info(full_uuid)
-    except (FileNotFoundError, OSError):
-        click.echo(f"Node not found: {uuid}", err=True)
-        sys.exit(1)
-    if body_info is not None:
-        body_path, original_mtime = body_info
+    body_result = commands.edit_node_body(vault, full_uuid)
+    if body_result.ok and body_result.data.get("type") == "body":
+        body_path: str = body_result.data["body_path"]
+        original_mtime: float = body_result.data["original_mtime"]
         editor = os.environ.get("EDITOR", "vi")
-        import subprocess
         subprocess.call([editor, body_path])
         new_mtime = os.stat(body_path).st_mtime
         if new_mtime == original_mtime:
@@ -531,15 +432,16 @@ def edit(ctx: click.Context, uuid: str, add_path: Optional[str], remove_path: Op
             return
         new_size = os.stat(body_path).st_size
         new_sha256 = sha256_file(body_path)
-        manager.commit_body_edit(full_uuid, new_mtime, new_size, new_sha256)
-        click.echo("Body updated.")
-    else:
-        try:
-            schema, current_values = manager.get_field_info(full_uuid)
-        except ValueError as e:
-            click.echo(f"Error: {e}", err=True)
-            sys.exit(1)
-        changes: dict[str, Any] = {}
+        result = commands.commit_body_edit(vault, full_uuid, new_mtime, new_size, new_sha256)
+        if result.ok:
+            click.echo("Body updated.")
+        return
+
+    fields_result = commands.edit_node_fields(vault, full_uuid)
+    if fields_result.ok and fields_result.data.get("type") == "fields":
+        schema = fields_result.data["schema"]
+        current_values: dict[str, str] = fields_result.data["current_values"]
+        changes: dict[str, str] = {}
         for field_def in schema.fields:
             current = current_values.get(field_def.name, "")
             try:
@@ -549,10 +451,15 @@ def edit(ctx: click.Context, uuid: str, add_path: Optional[str], remove_path: Op
                 break
             if new_val:
                 changes[field_def.name] = new_val
-        if manager.update_node_fields(full_uuid, changes):
+        update_result = commands.update_node_fields(vault, full_uuid, changes)
+        if update_result.ok:
             click.echo("Fields updated.")
         else:
             click.echo("No changes detected.")
+        return
+
+    click.echo(f"Node not found: {uuid}", err=True)
+    sys.exit(1)
 
 
 @cli.command()
@@ -566,25 +473,28 @@ def rm(ctx: click.Context, uuid: str, yes: bool) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    manager = NodeManager(vault.path)
-    try:
-        if manager.delete_node(uuid, force=yes):
-            click.echo(f"Deleted node {uuid}")
-        else:
-            click.echo(f"Node not found: {uuid}", err=True)
-            sys.exit(1)
-    except ValueError as e:
-        click.echo(f"Warning: {e}", err=True)
+    result = commands.delete_node(vault, uuid, force=yes)
+    if result.ok:
+        click.echo(f"Deleted node {result.data['uuid']}")
+    elif result.code == "CONFIRM_REQUIRED":
+        click.echo(f"Warning: {result.error}", err=True)
         click.echo("Delete anyway? [y/N]: ", nl=False)
         try:
             confirm = input().strip().lower()
         except (EOFError, KeyboardInterrupt):
             confirm = "n"
         if confirm == "y":
-            manager.delete_node(uuid, force=True)
-            click.echo(f"Deleted node {uuid}")
+            result2 = commands.delete_node(vault, uuid, force=True)
+            if result2.ok:
+                click.echo(f"Deleted node {result2.data['uuid']}")
+            else:
+                click.echo(f"Node not found: {uuid}", err=True)
+                sys.exit(1)
         else:
             click.echo("Aborted.")
+    else:
+        click.echo(result.error, err=True)
+        sys.exit(1)
 
 
 @cli.command()
@@ -597,12 +507,12 @@ def show(ctx: click.Context, uuid: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    manager = NodeManager(vault.path)
-    output = manager.show_node(uuid)
-    if output is None:
-        click.echo(f"Node not found: {uuid}", err=True)
+    result = commands.show_node(vault, uuid)
+    if result.ok:
+        click.echo(result.data["output"])
+    else:
+        click.echo(result.error, err=True)
         sys.exit(1)
-    click.echo(output)
 
 
 @cli.command()
@@ -616,61 +526,18 @@ def link(ctx: click.Context, source_uuid: str, target_uuid: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    try:
-        full_source = resolve_uuid(vault.path, source_uuid)
-        full_target = resolve_uuid(vault.path, target_uuid)
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
-
-    manager = NodeManager(vault.path)
-    all_nodes = manager.list_nodes()
-
-    source = next((n for n in all_nodes if n.uuid == full_source), None)
-    target = next((n for n in all_nodes if n.uuid == full_target), None)
-
-    if source is None:
-        click.echo(f"Source node not found: {source_uuid}", err=True)
-        sys.exit(1)
-
-    if target is None:
-        click.echo("Warning: Target node does not exist in any registered vault", err=True)
-
-    storage_dir = os.path.join(vault.path, ".storage")
-    meta_path = None
-    for root, _dirs, files in os.walk(storage_dir):
-        for fname in files:
-            if fname == "metadata.toml":
-                try:
-                    meta = NodeMetadata.from_toml(os.path.join(root, fname))
-                    if meta.uuid == full_source:
-                        meta_path = os.path.join(root, fname)
-                        break
-                except Exception:
-                    continue
-        if meta_path:
-            break
-
-    if meta_path is None:
-        click.echo(f"Could not find metadata for {source_uuid}", err=True)
-        sys.exit(1)
-
-    source_meta = NodeMetadata.from_toml(meta_path)
-    link_entry = {
-        "target": target_uuid,
-        "type": target.type if target else "",
-        "title": target.title if target else "",
-    }
-
-    for existing in source_meta.links:
-        if existing.get("target") == target_uuid:
+    result = commands.link_nodes(vault, source_uuid, target_uuid)
+    if result.ok:
+        data = result.data
+        if "warning" in data:
+            click.echo(f"Warning: {data['warning']}", err=True)
+        click.echo(f"Linked {data['source'][:8]} -> {data['target'][:8]}")
+    else:
+        if result.code == "ALREADY_EXISTS":
             click.echo("Link already exists.")
             return
-
-    source_meta.links.append(link_entry)
-    source_meta.sync_dirty = True
-    source_meta.save(meta_path)
-    click.echo(f"Linked {full_source[:8]} -> {full_target[:8]}")
+        click.echo(f"Error: {result.error}", err=True)
+        sys.exit(1)
 
 
 @cli.command()
@@ -683,14 +550,12 @@ def backlinks(ctx: click.Context, uuid: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    try:
-        full_uuid = resolve_uuid(vault.path, uuid)
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
+    result = commands.list_backlinks(vault, uuid)
+    if not result.ok:
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
 
-    index = BacklinkIndex(vault.path)
-    links = index.get_backlinks(full_uuid)
+    links = result.data.get("backlinks", [])
     if not links:
         click.echo("No backlinks found.")
         return
@@ -710,14 +575,8 @@ def graph(ctx: click.Context, output_format: str, include_paths: bool) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    manager = NodeManager(vault.path)
-    nodes = manager.list_nodes()
-    exporter = GraphExporter(vault.path)
-
-    if output_format == "dot":
-        click.echo(exporter.export_dot(nodes, include_paths=include_paths))
-    else:
-        click.echo(exporter.export_json(nodes, include_paths=include_paths))
+    result = commands.export_graph(vault, output_format, include_paths)
+    click.echo(result.data["output"])
 
 
 @cli.command()
@@ -731,11 +590,12 @@ def query(ctx: click.Context, query_str: str, output_format: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    parser = QueryParser()
-    ast = parser.parse(query_str)
-    engine = QueryEngine(vault.path)
-    results = engine.execute(ast)
+    result = commands.query_nodes(vault, query_str)
+    if not result.ok:
+        click.echo(f"Error: {result.error}", err=True)
+        sys.exit(1)
 
+    results = result.data.get("results", [])
     if not results:
         click.echo("No results found")
         return
@@ -775,8 +635,8 @@ def status(ctx: click.Context) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    tracker = ChangeTracker(vault.path)
-    report = tracker.status()
+    result = commands.vault_status(vault)
+    report = result.data
 
     changed = report.get("changed", [])
     new_files = report.get("new_files", [])
@@ -807,6 +667,8 @@ def status(ctx: click.Context) -> None:
         except (EOFError, KeyboardInterrupt):
             confirm = "n"
         if confirm == "y":
+            from prism.tracking import ChangeTracker
+            tracker = ChangeTracker(vault.path)
             tracker.re_extract_links(node["uuid"])
 
 
@@ -820,25 +682,11 @@ def verify(ctx: click.Context, uuid: str) -> None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    try:
-        full_uuid = resolve_uuid(vault.path, uuid)
-    except ValueError as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
-
-    manager = NodeManager(vault.path)
-    all_nodes = manager.list_nodes()
-    node = next((n for n in all_nodes if n.uuid == full_uuid), None)
-
-    if node is None:
-        click.echo(f"Node not found: {uuid}", err=True)
-        sys.exit(1)
-
-    ok = manager.storage.verify_integrity(full_uuid, node.blob_sha256)
-    if ok:
+    result = commands.verify_node(vault, uuid)
+    if result.ok:
         click.echo("OK")
     else:
-        click.echo("CORRUPTED")
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
 
 

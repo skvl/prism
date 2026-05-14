@@ -1,18 +1,15 @@
 import os
 import readline
+import subprocess
 import sys
 from typing import Optional
 
-from prism.node.manager import NodeManager, resolve_uuid
-from prism.node.metadata import NodeMetadata
-from prism.node.storage import compute_storage_path, sha256_file
-from prism.graph.links import BacklinkIndex, GraphExporter
-from prism.path.resolver import PathResolver
-from prism.query.parser import QueryParser
-from prism.query.engine import QueryEngine
-from prism.tracking import ChangeTracker
-from prism.types.loader import TypeLoader
+from prism.node.storage import sha256_file
 from prism.vault.vault import Vault
+
+from . import commands
+from . import completions
+
 
 HISTORY_FILE = os.path.expanduser("~/.prism_repl_history")
 MAX_HISTORY = 1000
@@ -35,39 +32,20 @@ DEGRADED_COMMANDS = {"init", "open", "help", "exit", "quit", "history"}
 UNSUPPORTED_IN_REPL = {"tutor"}
 
 
-def _write_builtin_types(vault: Vault) -> None:
-    from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
-
-    types_dir = os.path.join(vault.path, ".metadata", "types")
-    os.makedirs(types_dir, exist_ok=True)
-
-    types = {
-        "note.toml": NOTE_TOML,
-        "contact.toml": CONTACT_TOML,
-        "bookmark.toml": BOOKMARK_TOML,
-        "file.toml": FILE_TOML,
-        "path.toml": PATH_TOML,
-    }
-    for fname, content in types.items():
-        path = os.path.join(types_dir, fname)
-        if not os.path.exists(path):
-            with open(path, "w") as f:
-                f.write(content)
-
-
 class Repl:
     def __init__(self, vault: Optional[Vault] = None, input_stream=None, output_stream=None) -> None:
         self.vault = vault
         self.last_uuid: Optional[str] = None
         self._completion_matches: list[str] = []
-        self._input = input_stream or sys.stdin
-        self._output = output_stream or sys.stdout
+        self._input = input_stream
+        self._output = output_stream
         self._setup_history()
         self._setup_completion()
 
     def _p(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
-        self._output.write(sep.join(str(o) for o in objects) + end)
-        self._output.flush()
+        out = self._output if self._output is not None else sys.stdout
+        out.write(sep.join(str(o) for o in objects) + end)
+        out.flush()
 
     def _setup_history(self) -> None:
         readline.set_history_length(MAX_HISTORY)
@@ -100,24 +78,26 @@ class Repl:
         return resolved
 
     def run(self) -> None:
-        self._output.write("Prism REPL. Type 'help' for commands, 'exit' to quit.\n")
+        inp = self._input if self._input is not None else sys.stdin
+        out = self._output if self._output is not None else sys.stdout
+        out.write("Prism REPL. Type 'help' for commands, 'exit' to quit.\n")
         if self.vault:
-            self._output.write(f"Connected to vault: {self.vault.path}\n")
+            out.write(f"Connected to vault: {self.vault.path}\n")
         else:
-            self._output.write("No vault connected. Run 'init' or 'open' to connect.\n")
-        self._output.flush()
+            out.write("No vault connected. Run 'init' or 'open' to connect.\n")
+        out.flush()
 
         while True:
             try:
-                self._output.write("prism> ")
-                self._output.flush()
-                raw = self._input.readline()
+                out.write("prism> ")
+                out.flush()
+                raw = inp.readline()
             except KeyboardInterrupt:
-                self._output.write("\n")
+                out.write("\n")
                 continue
 
             if not raw:
-                self._output.write("\n")
+                out.write("\n")
                 self._save_history()
                 break
 
@@ -185,24 +165,24 @@ class Repl:
 
     def _cmd_init(self, args: list[str]) -> None:
         path = args[0] if args else "."
-        try:
-            vault = Vault.init(path)
-            _write_builtin_types(vault)
-            self.vault = vault
-            self._p(f"Vault initialized at {vault.path}")
-            self._p(f"Vault UUID: {vault.vault_uuid}")
-        except FileExistsError as e:
-            self._p(f"Error: {e}")
+        result = commands.init_vault(path)
+        if result.ok:
+            self.vault = result.data["vault"]
+            self._p(f"Vault initialized at {result.data['path']}")
+            self._p(f"Vault UUID: {result.data['vault_uuid']}")
+        else:
+            self._p(f"Error: {result.error}")
 
     def _cmd_open(self, args: list[str]) -> None:
         if not args:
             self._p("Usage: open <path>")
             return
-        try:
-            self.vault = Vault.open(args[0])
+        result = commands.open_vault(args[0])
+        if result.ok:
+            self.vault = result.data["vault"]
             self._p(f"Connected to vault: {self.vault.path}")
-        except FileNotFoundError as e:
-            self._p(f"Error: {e}")
+        else:
+            self._p(f"Error: {result.error}")
 
     def _cmd_new(self, args: list[str]) -> None:
         if not args:
@@ -235,42 +215,33 @@ class Repl:
             extra_fields[key] = val
 
         assert self.vault is not None
-        manager = NodeManager(self.vault.path)
-        try:
-            meta = manager.create_node(
-                type_name=type_name,
-                title=title,
-                fields=extra_fields,
-                tags=tags if tags else None,
-            )
+        result = commands.create_node(
+            self.vault, type_name, title,
+            fields=extra_fields,
+            tags=tags if tags else None,
+            add_path=add_path,
+        )
+        if result.ok:
+            meta = result.data["meta"]
             self.last_uuid = meta.uuid
             self._p(f"Created {type_name} node: {meta.uuid}")
-            if add_path:
-                resolver = PathResolver(self.vault.path)
-                try:
-                    path_uuid = resolver.resolve(add_path)
-                except ValueError:
-                    self._p(f"Path does not exist: {add_path}")
-                else:
-                    meta.paths.append(path_uuid)
-                    storage_dir = compute_storage_path(self.vault.path, meta.uuid)
-                    meta_path = NodeMetadata.metadata_path(storage_dir)
-                    meta.save(meta_path)
-                    self._p(f"Added path: {add_path}")
-        except ValueError as e:
-            self._p(f"Error: {e}")
+            if result.data.get("path_added"):
+                self._p(f"Added path: {add_path}")
+            elif "warning" in result.data:
+                self._p(f"Path does not exist: {add_path}")
+        else:
+            self._p(f"Error: {result.error}")
 
     def _cmd_show(self, args: list[str]) -> None:
         if not args:
             self._p("Usage: show <uuid>")
             return
         assert self.vault is not None
-        manager = NodeManager(self.vault.path)
-        output = manager.show_node(args[0])
-        if output is None:
-            self._p(f"Node not found: {args[0]}")
+        result = commands.show_node(self.vault, args[0])
+        if result.ok:
+            self._p(result.data["output"])
         else:
-            self._p(output)
+            self._p(result.error)
 
     def _cmd_edit(self, args: list[str]) -> None:
         if not args:
@@ -292,38 +263,28 @@ class Repl:
             else:
                 i += 1
 
-        manager = NodeManager(self.vault.path)
-        try:
-            full_uuid = resolve_uuid(self.vault.path, uuid_arg)
-        except ValueError as e:
-            self._p(f"Error: {e}")
-            return
-
-        if add_path is not None:
-            try:
-                if manager.add_path_to_node(full_uuid, add_path):
-                    self._p(f"Added path: {add_path}")
-                else:
+        if add_path is not None or remove_path is not None:
+            result = commands.edit_node(self.vault, uuid_arg, add_path=add_path, remove_path=remove_path)
+            if result.ok:
+                action = result.data.get("action", "")
+                path = result.data.get("path", "")
+                if action == "add_path":
+                    self._p(f"Added path: {path}")
+                elif action == "add_path_skipped":
                     self._p("Node already associated with this path.")
-            except ValueError as e:
-                self._p(f"Error: {e}")
-            return
-
-        if remove_path is not None:
-            try:
-                if manager.remove_path_from_node(full_uuid, remove_path):
-                    self._p(f"Removed path: {remove_path}")
-                else:
+                elif action == "remove_path":
+                    self._p(f"Removed path: {path}")
+                elif action == "remove_path_skipped":
                     self._p("Node not associated with this path.")
-            except ValueError as e:
-                self._p(f"Error: {e}")
+            else:
+                self._p(f"Error: {result.error}")
             return
 
-        body_info = manager.get_body_info(full_uuid)
-        if body_info is not None:
-            body_path, original_mtime = body_info
+        body_result = commands.edit_node_body(self.vault, uuid_arg)
+        if body_result.ok and body_result.data.get("type") == "body":
+            body_path: str = body_result.data["body_path"]
+            original_mtime: float = body_result.data["original_mtime"]
             editor = os.environ.get("EDITOR", "vi")
-            import subprocess
             subprocess.call([editor, body_path])
             new_mtime = os.stat(body_path).st_mtime
             if new_mtime == original_mtime:
@@ -331,128 +292,96 @@ class Repl:
                 return
             new_size = os.stat(body_path).st_size
             new_sha256 = sha256_file(body_path)
-            manager.commit_body_edit(full_uuid, new_mtime, new_size, new_sha256)
-            self._p("Body updated.")
-            self.last_uuid = full_uuid
-        else:
-            try:
-                schema, current_values = manager.get_field_info(full_uuid)
-            except ValueError as e:
-                self._p(f"Error: {e}")
-                return
-            changes: dict[str, Any] = {}
+            result = commands.commit_body_edit(self.vault, uuid_arg, new_mtime, new_size, new_sha256)
+            if result.ok:
+                self._p("Body updated.")
+                self.last_uuid = uuid_arg
+            return
+
+        fields_result = commands.edit_node_fields(self.vault, uuid_arg)
+        if fields_result.ok and fields_result.data.get("type") == "fields":
+            schema = fields_result.data["schema"]
+            current_values: dict[str, str] = fields_result.data["current_values"]
+            changes: dict[str, str] = {}
             for field_def in schema.fields:
                 current = current_values.get(field_def.name, "")
+                inp = self._input or sys.stdin
+                out = self._output or sys.stdout
+                out.write(f"Enter new {field_def.name} or press ENTER to keep [{current}]: ")
+                out.flush()
                 try:
-                    self._output.write(f"Enter new {field_def.name} or press ENTER to keep [{current}]: ")
-                    self._output.flush()
-                    raw = self._input.readline()
+                    raw = inp.readline()
                 except KeyboardInterrupt:
-                    self._output.write("\n")
+                    out.write("\n")
                     break
                 if not raw:
                     break
                 new_val = raw.strip()
                 if new_val:
                     changes[field_def.name] = new_val
-            if manager.update_node_fields(full_uuid, changes):
+            result = commands.update_node_fields(self.vault, uuid_arg, changes)
+            if result.ok:
                 self._p("Fields updated.")
-                self.last_uuid = full_uuid
+                self.last_uuid = uuid_arg
             else:
                 self._p("No changes detected.")
+            return
+
+        self._p(f"Node not found: {uuid_arg}")
 
     def _cmd_path(self, args: list[str]) -> None:
         if not args:
             self._p("Usage: path create <path> | path rm <path> | path tree [<path>]")
             return
         assert self.vault is not None
-        resolver = PathResolver(self.vault.path)
         sub = args[0].lower()
 
         if sub == "create":
             if len(args) < 2:
                 self._p("Usage: path create <path>")
                 return
-            try:
-                leaf_uuid = resolver.resolve_or_create(args[1])
+            result = commands.manage_paths(self.vault, "create", args[1])
+            if result.ok:
                 self._p(f"Path created: {args[1]}")
-                self._p(f"Leaf UUID: {leaf_uuid}")
-            except ValueError as e:
-                self._p(f"Error: {e}")
+                self._p(f"Leaf UUID: {result.data['leaf_uuid']}")
+            else:
+                self._p(f"Error: {result.error}")
 
         elif sub == "rm":
             if len(args) < 2:
                 self._p("Usage: path rm <path>")
                 return
-            try:
-                leaf_uuid = resolver.resolve(args[1])
-            except ValueError as e:
-                self._p(f"Error: {e}")
-                return
-            descendants = resolver.collect_descendants(leaf_uuid)
-            all_uuids = [leaf_uuid] + descendants
-            manager = NodeManager(self.vault.path)
-            nodes = manager.list_nodes()
-            for n in nodes:
-                matching = [p for p in all_uuids if p in n.paths]
-                if matching:
-                    n.paths = [p for p in n.paths if p not in all_uuids]
-                    storage_dir = compute_storage_path(self.vault.path, n.uuid)
-                    meta_path = NodeMetadata.metadata_path(storage_dir)
-                    n.save(meta_path)
-            import shutil
-            for uid in all_uuids:
-                sdir = compute_storage_path(self.vault.path, uid)
-                if os.path.exists(sdir):
-                    shutil.rmtree(sdir)
-            self._p(f"Removed path: {args[1]}")
+            result = commands.manage_paths(self.vault, "rm", args[1])
+            if result.ok:
+                self._p(f"Removed path: {args[1]}")
+            else:
+                self._p(f"Error: {result.error}")
 
         elif sub == "tree":
             path_str = args[1] if len(args) > 1 else ""
-            try:
-                root_uuid = resolver.resolve(path_str if path_str else "/")
-            except ValueError as e:
-                self._p(f"Error: {e}")
+            result = commands.manage_paths(self.vault, "tree", path_str)
+            if not result.ok:
+                self._p(f"Error: {result.error}")
                 return
-
-            nodes = resolver._all_nodes()
-            nodes_by_uuid = {n.uuid: n for n in nodes}
-
-            root_node = nodes_by_uuid.get(root_uuid)
-            if root_node is None:
+            tree_data = result.data.get("tree")
+            if tree_data is None:
                 self._p("No path found.")
                 return
 
-            def _count_referencing(uuid: str) -> int:
-                return sum(1 for n in nodes if uuid in n.paths)
-
-            def _render(uuid: str, prefix: str = "", is_last: bool = True) -> None:
-                node = nodes_by_uuid.get(uuid)
-                if node is None:
-                    return
-                name = node.fields.get("name", node.title or uuid[:8])
-                ref_count = _count_referencing(uuid)
+            def _render(node: dict, prefix: str = "", is_last: bool = True) -> None:
+                name = node.get("name", node.get("uuid", "")[:8])
+                ref_count = node.get("ref_count", 0)
                 suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
                 connector = "└── " if is_last else "├── "
                 self._p(f"{prefix}{connector}{name}{suffix}")
-                children = sorted(
-                    resolver._find_children(uuid, nodes),
-                    key=lambda c: c.fields.get("name", ""),
-                )
+                children = node.get("children", [])
                 child_prefix = prefix + ("    " if is_last else "│   ")
                 for i, child in enumerate(children):
-                    _render(child.uuid, child_prefix, i == len(children) - 1)
+                    _render(child, child_prefix, i == len(children) - 1)
 
-            name = root_node.fields.get("name", "/")
-            ref_count = _count_referencing(root_uuid)
-            suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
-            self._p(f"{name}{suffix}")
-            children = sorted(
-                resolver._find_children(root_uuid, nodes),
-                key=lambda c: c.fields.get("name", ""),
-            )
-            for i, child in enumerate(children):
-                _render(child.uuid, "", i == len(children) - 1)
+            self._p(f"{tree_data['name']}{' (' + str(tree_data['ref_count']) + ' nodes)' if tree_data['ref_count'] > 0 else ''}")
+            for i, child in enumerate(tree_data.get("children", [])):
+                _render(child, "", i == len(tree_data["children"]) - 1)
 
         else:
             self._p(f"Unknown path subcommand: {sub}")
@@ -467,94 +396,84 @@ class Repl:
         sub_args = args[1:]
 
         if sub == "add":
-            self._cmd_tag_add(sub_args)
+            if len(sub_args) < 2:
+                self._p("Usage: tag add <uuid> <tag> [<tag>...]")
+                return
+            result = commands.manage_tags(self.vault, "add", sub_args[0], sub_args[1:])
+            if not result.ok:
+                self._p(f"Error: {result.error}")
+                return
+            for r in result.data.get("results", []):
+                if r["status"] == "added":
+                    self._p(f"Added tag: {r['tag']}")
+                elif r["status"] == "already_present":
+                    self._p(f"Tag already present: {r['tag']}")
+                elif r["status"] == "error":
+                    self._p(f"Error: {r['error']}")
+
         elif sub == "rm":
-            self._cmd_tag_rm(sub_args)
+            if len(sub_args) < 2:
+                self._p("Usage: tag rm <uuid> <tag> [<tag>...]")
+                return
+            result = commands.manage_tags(self.vault, "rm", sub_args[0], sub_args[1:])
+            if not result.ok:
+                self._p(f"Error: {result.error}")
+                return
+            for r in result.data.get("results", []):
+                if r["status"] == "removed":
+                    self._p(f"Removed tag: {r['tag']}")
+                elif r["status"] == "not_present":
+                    self._p(f"Tag not present: {r['tag']}")
+
         elif sub == "list":
-            self._cmd_tag_list(sub_args)
+            show_counts = "--count" in sub_args
+            result = commands.manage_tags(self.vault, "list")
+            tags_dict = result.data.get("tags", {})
+            if not tags_dict:
+                return
+            for tag_name, tag_count in tags_dict.items():
+                if show_counts:
+                    self._p(f"{tag_name} ({tag_count})")
+                else:
+                    self._p(tag_name)
+
         elif sub == "rename":
-            self._cmd_tag_rename(sub_args)
+            if len(sub_args) < 2:
+                self._p("Usage: tag rename <old-tag> <new-tag>")
+                return
+            result = commands.manage_tags(self.vault, "rename", tags=[sub_args[0], sub_args[1]])
+            if result.ok:
+                affected = result.data["affected"]
+                self._p(f"Renamed tag '{sub_args[0]}' to '{sub_args[1]}' across {affected} node(s)")
+            else:
+                self._p(f"Error: {result.error}")
+
         else:
             self._p(f"Unknown tag subcommand: {sub}")
-            self._p("Usage: tag add | tag rm | tag list | tag rename")
-
-    def _cmd_tag_add(self, args: list[str]) -> None:
-        if len(args) < 2:
-            self._p("Usage: tag add <uuid> <tag> [<tag>...]")
-            return
-        assert self.vault is not None
-        manager = NodeManager(self.vault.path)
-        uid = args[0]
-        tags = args[1:]
-        try:
-            full_uuid = resolve_uuid(self.vault.path, uid)
-        except ValueError as e:
-            self._p(f"Error: {e}")
-            return
-        for tag_str in tags:
-            try:
-                if manager.add_tag(full_uuid, tag_str):
-                    self._p(f"Added tag: {tag_str}")
-                else:
-                    self._p(f"Tag already present: {tag_str}")
-            except ValueError as e:
-                self._p(f"Error: {e}")
-
-    def _cmd_tag_rm(self, args: list[str]) -> None:
-        if len(args) < 2:
-            self._p("Usage: tag rm <uuid> <tag> [<tag>...]")
-            return
-        assert self.vault is not None
-        manager = NodeManager(self.vault.path)
-        uid = args[0]
-        tags = args[1:]
-        try:
-            full_uuid = resolve_uuid(self.vault.path, uid)
-        except ValueError as e:
-            self._p(f"Error: {e}")
-            return
-        for tag_str in tags:
-            if manager.remove_tag(full_uuid, tag_str):
-                self._p(f"Removed tag: {tag_str}")
-            else:
-                self._p(f"Tag not present: {tag_str}")
-
-    def _cmd_tag_list(self, args: list[str]) -> None:
-        assert self.vault is not None
-        manager = NodeManager(self.vault.path)
-        show_counts = "--count" in args
-        tags_dict = manager.list_tags()
-        if not tags_dict:
-            return
-        for tag_name, tag_count in tags_dict.items():
-            if show_counts:
-                self._p(f"{tag_name} ({tag_count})")
-            else:
-                self._p(tag_name)
-
-    def _cmd_tag_rename(self, args: list[str]) -> None:
-        if len(args) < 2:
-            self._p("Usage: tag rename <old-tag> <new-tag>")
-            return
-        assert self.vault is not None
-        manager = NodeManager(self.vault.path)
-        old_tag, new_tag = args[0], args[1]
-        try:
-            affected = manager.rename_tag(old_tag, new_tag)
-            self._p(f"Renamed tag '{old_tag}' to '{new_tag}' across {affected} node(s)")
-        except ValueError as e:
-            self._p(f"Error: {e}")
 
     def _cmd_rm(self, args: list[str]) -> None:
         if not args:
             self._p("Usage: rm <uuid>")
             return
         assert self.vault is not None
-        manager = NodeManager(self.vault.path)
-        if manager.delete_node(args[0]):
-            self._p(f"Deleted node {args[0]}")
+        result = commands.delete_node(self.vault, args[0], force=False)
+        if result.ok:
+            self._p(f"Deleted node {result.data['uuid']}")
+        elif result.code == "CONFIRM_REQUIRED":
+            self._p(f"Warning: {result.error}")
+            self._output.write("Delete anyway? [y/N]: ")
+            self._output.flush()
+            confirm = self._input.readline().strip().lower()
+            if confirm == "y":
+                result2 = commands.delete_node(self.vault, args[0], force=True)
+                if result2.ok:
+                    self._p(f"Deleted node {result2.data['uuid']}")
+                else:
+                    self._p(f"Node not found: {args[0]}")
+            else:
+                self._p("Aborted.")
         else:
-            self._p(f"Node not found: {args[0]}")
+            self._p(result.error)
 
     def _cmd_query(self, args: list[str]) -> None:
         if not args:
@@ -562,15 +481,14 @@ class Repl:
             return
         query_str = " ".join(args)
         assert self.vault is not None
-        parser = QueryParser()
-        ast = parser.parse(query_str)
-        engine = QueryEngine(self.vault.path)
-        results = engine.execute(ast)
-
+        result = commands.query_nodes(self.vault, query_str)
+        if not result.ok:
+            self._p(f"Error: {result.error}")
+            return
+        results = result.data.get("results", [])
         if not results:
             self._p("No results found")
             return
-
         self._p(f"{'UUID':<12} {'Type':<12} {'Title':<30} {'Tags':<20} {'Updated':<25}")
         self._p("-" * 99)
         for node in results:
@@ -587,76 +505,30 @@ class Repl:
         if len(args) < 2:
             self._p("Usage: link <source-uuid> <target-uuid>")
             return
-        source_uuid, target_uuid = args[0], args[1]
         assert self.vault is not None
-        try:
-            full_source = resolve_uuid(self.vault.path, source_uuid)
-            full_target = resolve_uuid(self.vault.path, target_uuid)
-        except ValueError as e:
-            self._p(f"Error: {e}")
-            return
-
-        manager = NodeManager(self.vault.path)
-        all_nodes = manager.list_nodes()
-        source = next((n for n in all_nodes if n.uuid == full_source), None)
-        target = next((n for n in all_nodes if n.uuid == full_target), None)
-
-        if source is None:
-            self._p(f"Source node not found: {source_uuid}")
-            return
-        if target is None:
-            self._p("Warning: Target node does not exist in any registered vault")
-
-        storage_dir = os.path.join(self.vault.path, ".storage")
-        meta_path = None
-        for root, _dirs, files in os.walk(storage_dir):
-            for fname in files:
-                if fname == "metadata.toml":
-                    try:
-                        meta = NodeMetadata.from_toml(os.path.join(root, fname))
-                        if meta.uuid == full_source:
-                            meta_path = os.path.join(root, fname)
-                            break
-                    except Exception:
-                        continue
-            if meta_path:
-                break
-
-        if meta_path is None:
-            self._p(f"Could not find metadata for {source_uuid}")
-            return
-
-        source_meta = NodeMetadata.from_toml(meta_path)
-        link_entry = {
-            "target": target_uuid,
-            "type": target.type if target else "",
-            "title": target.title if target else "",
-        }
-
-        for existing in source_meta.links:
-            if existing.get("target") == target_uuid:
+        result = commands.link_nodes(self.vault, args[0], args[1])
+        if result.ok:
+            data = result.data
+            if "warning" in data:
+                self._p(f"Warning: {data['warning']}")
+            self._p(f"Linked {data['source'][:8]} -> {data['target'][:8]}")
+            self.last_uuid = data["source"]
+        else:
+            if result.code == "ALREADY_EXISTS":
                 self._p("Link already exists.")
                 return
-
-        source_meta.links.append(link_entry)
-        source_meta.sync_dirty = True
-        source_meta.save(meta_path)
-        self.last_uuid = full_source
-        self._p(f"Linked {full_source[:8]} -> {full_target[:8]}")
+            self._p(result.error)
 
     def _cmd_backlinks(self, args: list[str]) -> None:
         if not args:
             self._p("Usage: backlinks <uuid>")
             return
         assert self.vault is not None
-        try:
-            full_uuid = resolve_uuid(self.vault.path, args[0])
-        except ValueError as e:
-            self._p(f"Error: {e}")
+        result = commands.list_backlinks(self.vault, args[0])
+        if not result.ok:
+            self._p(result.error)
             return
-
-        index = BacklinkIndex(self.vault.path)
-        links = index.get_backlinks(full_uuid)
+        links = result.data.get("backlinks", [])
         if not links:
             self._p("No backlinks found.")
             return
@@ -668,25 +540,17 @@ class Repl:
         if args and args[0] in ("dot", "json"):
             fmt = args[0]
         assert self.vault is not None
-
-        manager = NodeManager(self.vault.path)
-        nodes = manager.list_nodes()
-        exporter = GraphExporter(self.vault.path)
-
-        if fmt == "dot":
-            self._p(exporter.export_dot(nodes))
-        else:
-            self._p(exporter.export_json(nodes))
+        result = commands.export_graph(self.vault, fmt)
+        if result.ok:
+            self._p(result.data["output"])
 
     def _cmd_status(self, args: list[str]) -> None:
         assert self.vault is not None
-        tracker = ChangeTracker(self.vault.path)
-        report = tracker.status()
-
+        result = commands.vault_status(self.vault)
+        report = result.data
         changed = report.get("changed", [])
         new_files = report.get("new_files", [])
         orphaned = report.get("orphaned", [])
-
         if changed:
             self._p("Changed nodes:")
             for node in changed:
@@ -701,12 +565,13 @@ class Repl:
                 self._p(f"  {o['uuid']}")
         if not changed and not new_files and not orphaned:
             self._p("Vault is clean.")
-
         for node in changed:
             self._output.write(f"Re-extract links from changed note {node['uuid']}? [y/N]: ")
             self._output.flush()
             resp = self._input.readline().strip().lower()
             if resp == "y":
+                from prism.tracking import ChangeTracker
+                tracker = ChangeTracker(self.vault.path)
                 tracker.re_extract_links(node["uuid"])
 
     def _cmd_add_file(self, args: list[str]) -> None:
@@ -714,66 +579,37 @@ class Repl:
             self._p("Usage: add-file <path> [--type <type>]")
             return
         assert self.vault is not None
-
         source_path = args[0]
-        type_name = "file"
+        type_name: Optional[str] = None
         if "--type" in args:
             idx = args.index("--type")
             if idx + 1 < len(args):
                 type_name = args[idx + 1]
-
-        source_path = os.path.abspath(source_path)
-        if not os.path.exists(source_path):
-            self._p(f"File not found: {source_path}")
-            return
-
-        file_hash = sha256_file(source_path)
-        manager = NodeManager(self.vault.path)
-
-        for node in manager.list_nodes():
-            if node.blob_sha256 == file_hash:
-                self._p(f"File already exists as node {node.uuid}")
-                self._output.write("Create a second reference? [y/N]: ")
-                self._output.flush()
-                confirm = self._input.readline().strip().lower()
-                if confirm != "y":
-                    return
-                break
-
-        try:
-            meta = manager.create_node(
-                type_name=type_name,
-                title=os.path.basename(source_path),
-                blob_path=source_path,
-            )
-            self.last_uuid = meta.uuid
-            self._p(f"Imported as node {meta.uuid}")
-        except ValueError as e:
-            self._p(f"Error: {e}")
+        result = commands.import_file(self.vault, source_path, type_name)
+        if result.code == "ALREADY_EXISTS":
+            self._p(f"File already exists as node {result.data['uuid']}")
+            self._output.write("Create a second reference? [y/N]: ")
+            self._output.flush()
+            confirm = self._input.readline().strip().lower()
+            if confirm != "y":
+                return
+            result = commands.import_file(self.vault, source_path, type_name, force=True)
+        if result.ok:
+            self.last_uuid = result.data["uuid"]
+            self._p(f"Imported as node {result.data['uuid']}")
+        else:
+            self._p(f"Error: {result.error}")
 
     def _cmd_verify(self, args: list[str]) -> None:
         if not args:
             self._p("Usage: verify <uuid>")
             return
         assert self.vault is not None
-        try:
-            full_uuid = resolve_uuid(self.vault.path, args[0])
-        except ValueError as e:
-            self._p(f"Error: {e}")
-            return
-
-        manager = NodeManager(self.vault.path)
-        all_nodes = manager.list_nodes()
-        node = next((n for n in all_nodes if n.uuid == full_uuid), None)
-        if node is None:
-            self._p(f"Node not found: {args[0]}")
-            return
-
-        ok = manager.storage.verify_integrity(full_uuid, node.blob_sha256)
-        if ok:
+        result = commands.verify_node(self.vault, args[0])
+        if result.ok:
             self._p("OK")
         else:
-            self._p("CORRUPTED")
+            self._p(result.error)
 
     def _cmd_help(self, args: list[str]) -> None:
         if args:
@@ -843,116 +679,10 @@ class Repl:
 
     def _complete(self, text: str, state: int) -> Optional[str]:
         if state == 0:
-            self._completion_matches = self._get_completions(text)
+            line = readline.get_line_buffer()
+            parts = line.split()
+            self._completion_matches = completions.resolve_completions(parts, text, self.vault, ALIASES)
         try:
             return self._completion_matches[state]
         except IndexError:
             return None
-
-    def _get_completions(self, text: str) -> list[str]:
-        line = readline.get_line_buffer()
-        parts = line.split()
-
-        if len(parts) <= 1:
-            return self._complete_command(text)
-
-        cmd = ALIASES.get(parts[0], parts[0])
-
-        if cmd == "path":
-            subs = ["create", "rm", "tree"]
-            if len(parts) == 2:
-                if text:
-                    return [s for s in subs if s.startswith(text)]
-                return subs
-            if len(parts) >= 3 and parts[1] in subs:
-                return self._complete_path(text)
-            return []
-
-        if cmd == "tag":
-            subs = ["add", "rm", "list", "rename"]
-            if len(parts) == 2:
-                if text:
-                    return [s for s in subs if s.startswith(text)]
-                return subs
-            if len(parts) >= 3:
-                sub = parts[1]
-                if sub in ("add", "rm"):
-                    if len(parts) == 3:
-                        return self._complete_uuid(text)
-                    if sub == "rm":
-                        return self._complete_tag(text)
-                elif sub == "rename":
-                    return self._complete_tag(text)
-            return []
-
-        if text.startswith("path:"):
-            return self._complete_path(text)
-
-        for i, part in enumerate(parts):
-            if part in ("--tag", "-t") and i + 1 >= len(parts):
-                return self._complete_tag(text)
-            if part in ("--add-path", "-a", "--remove-path", "-r") and i + 1 >= len(parts):
-                return self._complete_path(text)
-
-        if cmd == "new" and len(parts) <= 2 and text:
-            return self._complete_type_name(text)
-
-        return self._complete_uuid(text)
-
-    def _complete_command(self, text: str) -> list[str]:
-        all_commands = sorted(set(list(ALIASES.keys()) + list(ALIASES.values()) + list(UNSUPPORTED_IN_REPL) + ["init", "open", "help", "history", "exit", "quit", "rm", "path"]))
-        if not text:
-            return all_commands
-        return [c for c in all_commands if c.startswith(text)]
-
-    def _complete_uuid(self, text: str) -> list[str]:
-        if self.vault is None:
-            return []
-        manager = NodeManager(self.vault.path)
-        try:
-            nodes = manager.list_nodes()
-        except Exception:
-            return []
-        if not text:
-            return [n.uuid for n in nodes]
-        return [n.uuid for n in nodes if n.uuid.startswith(text)]
-
-    def _complete_type_name(self, text: str) -> list[str]:
-        if self.vault is None:
-            return []
-        types_dir = os.path.join(self.vault.path, ".metadata", "types")
-        loader = TypeLoader(types_dir)
-        schemas = loader.load_all()
-        names = list(schemas.keys())
-        if not text:
-            return names
-        return [n for n in names if n.startswith(text)]
-
-    def _complete_tag(self, text: str) -> list[str]:
-        if self.vault is None:
-            return []
-        tags: set[str] = set()
-        manager = NodeManager(self.vault.path)
-        try:
-            for node in manager.list_nodes():
-                tags.update(node.tags)
-        except Exception:
-            return []
-        if not text:
-            return sorted(tags)
-        return sorted(t for t in tags if t.startswith(text))
-
-    def _complete_path(self, text: str) -> list[str]:
-        if self.vault is None:
-            return []
-        path_prefix = text
-        if text.startswith("path:"):
-            path_prefix = text[5:]
-        resolver = PathResolver(self.vault.path)
-        try:
-            completions = resolver.complete(path_prefix)
-        except Exception:
-            return []
-        if text.startswith("path:"):
-            return [f"path:{p}" for p in completions]
-        return completions
