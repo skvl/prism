@@ -140,10 +140,10 @@ class TestExecuteCommand:
 
 
 class TestBuildLessonPlan:
-    def test_returns_7_lessons(self):
+    def test_returns_8_lessons(self):
         t = Tutor()
         lessons = t._build_lesson_plan()
-        assert len(lessons) == 7
+        assert len(lessons) == 8
 
     def test_lesson_numbers(self):
         t = Tutor()

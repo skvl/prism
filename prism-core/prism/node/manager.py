@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from prism.node.metadata import NodeMetadata
+from prism.node.metadata import TAG_PATTERN, NodeMetadata
 from prism.node.storage import StorageEngine, compute_storage_path, sha256_file
 from prism.path.resolver import PathResolver
 from prism.types.loader import TypeLoader
@@ -292,3 +292,64 @@ class NodeManager:
 
     def list_nodes(self) -> list[NodeMetadata]:
         return _list_all_nodes(self.vault_path)
+
+    def add_tag(self, uid: str, tag: str) -> bool:
+        uid = self._resolve_uuid(uid)
+        if not TAG_PATTERN.match(tag):
+            raise ValueError(f"Invalid tag: {tag!r}")
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        if not os.path.exists(meta_path):
+            raise ValueError(f"Node not found: {uid}")
+        meta = NodeMetadata.from_toml(meta_path)
+        if tag in meta.tags:
+            return False
+        meta.tags.append(tag)
+        meta.updated_at = datetime.now(timezone.utc).isoformat()
+        meta.sync_dirty = True
+        meta.save(meta_path)
+        return True
+
+    def remove_tag(self, uid: str, tag: str) -> bool:
+        uid = self._resolve_uuid(uid)
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        if not os.path.exists(meta_path):
+            raise ValueError(f"Node not found: {uid}")
+        meta = NodeMetadata.from_toml(meta_path)
+        if tag not in meta.tags:
+            return False
+        meta.tags = [t for t in meta.tags if t != tag]
+        meta.updated_at = datetime.now(timezone.utc).isoformat()
+        meta.sync_dirty = True
+        meta.save(meta_path)
+        return True
+
+    def list_tags(self) -> dict[str, int]:
+        tag_counts: dict[str, int] = {}
+        for node in self.list_nodes():
+            for tag in node.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        return dict(sorted(tag_counts.items()))
+
+    def rename_tag(self, old_tag: str, new_tag: str) -> int:
+        if not TAG_PATTERN.match(new_tag):
+            raise ValueError(f"Invalid tag: {new_tag!r}")
+        if old_tag == new_tag:
+            return 0
+        affected = 0
+        for node in self.list_nodes():
+            if old_tag not in node.tags:
+                continue
+            storage_dir = compute_storage_path(self.vault_path, node.uuid)
+            meta_path = NodeMetadata.metadata_path(storage_dir)
+            meta = NodeMetadata.from_toml(meta_path)
+            new_tags = [t for t in meta.tags if t != old_tag]
+            if new_tag not in new_tags:
+                new_tags.append(new_tag)
+            meta.tags = new_tags
+            meta.updated_at = datetime.now(timezone.utc).isoformat()
+            meta.sync_dirty = True
+            meta.save(meta_path)
+            affected += 1
+        return affected

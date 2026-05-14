@@ -160,6 +160,7 @@ class Repl:
             "help": self._cmd_help,
             "history": self._cmd_history,
             "path": self._cmd_path,
+            "tag": self._cmd_tag,
         }
 
         handler = dispatch.get(cmd)
@@ -453,6 +454,93 @@ class Repl:
             print(f"Unknown path subcommand: {sub}")
             print("Usage: path create <path> | path rm <path> | path tree [<path>]")
 
+    def _cmd_tag(self, args: list[str]) -> None:
+        if not args:
+            print("Usage: tag add <uuid> <tag> [<tag>...] | tag rm <uuid> <tag> [<tag>...] | tag list [--count] | tag rename <old> <new>")
+            return
+        assert self.vault is not None
+        sub = args[0].lower()
+        sub_args = args[1:]
+
+        if sub == "add":
+            self._cmd_tag_add(sub_args)
+        elif sub == "rm":
+            self._cmd_tag_rm(sub_args)
+        elif sub == "list":
+            self._cmd_tag_list(sub_args)
+        elif sub == "rename":
+            self._cmd_tag_rename(sub_args)
+        else:
+            print(f"Unknown tag subcommand: {sub}")
+            print("Usage: tag add | tag rm | tag list | tag rename")
+
+    def _cmd_tag_add(self, args: list[str]) -> None:
+        if len(args) < 2:
+            print("Usage: tag add <uuid> <tag> [<tag>...]")
+            return
+        assert self.vault is not None
+        manager = NodeManager(self.vault.path)
+        uid = args[0]
+        tags = args[1:]
+        try:
+            full_uuid = resolve_uuid(self.vault.path, uid)
+        except ValueError as e:
+            print(f"Error: {e}")
+            return
+        for tag_str in tags:
+            try:
+                if manager.add_tag(full_uuid, tag_str):
+                    print(f"Added tag: {tag_str}")
+                else:
+                    print(f"Tag already present: {tag_str}")
+            except ValueError as e:
+                print(f"Error: {e}")
+
+    def _cmd_tag_rm(self, args: list[str]) -> None:
+        if len(args) < 2:
+            print("Usage: tag rm <uuid> <tag> [<tag>...]")
+            return
+        assert self.vault is not None
+        manager = NodeManager(self.vault.path)
+        uid = args[0]
+        tags = args[1:]
+        try:
+            full_uuid = resolve_uuid(self.vault.path, uid)
+        except ValueError as e:
+            print(f"Error: {e}")
+            return
+        for tag_str in tags:
+            if manager.remove_tag(full_uuid, tag_str):
+                print(f"Removed tag: {tag_str}")
+            else:
+                print(f"Tag not present: {tag_str}")
+
+    def _cmd_tag_list(self, args: list[str]) -> None:
+        assert self.vault is not None
+        manager = NodeManager(self.vault.path)
+        show_counts = "--count" in args
+        tags_dict = manager.list_tags()
+        if not tags_dict:
+            return
+        for tag_name, tag_count in tags_dict.items():
+            if show_counts:
+                print(f"{tag_name} ({tag_count})")
+            else:
+                print(tag_name)
+
+    def _cmd_tag_rename(self, args: list[str]) -> None:
+        if len(args) < 2:
+            print("Usage: tag rename <old-tag> <new-tag>")
+            return
+        assert self.vault is not None
+        manager = NodeManager(self.vault.path)
+        old_tag, new_tag = args[0], args[1]
+        try:
+            affected = manager.rename_tag(old_tag, new_tag)
+            print(f"Renamed tag '{old_tag}' to '{new_tag}' across {affected} node(s)")
+        except ValueError as e:
+            print(f"Error: {e}")
+
     def _cmd_rm(self, args: list[str]) -> None:
         if not args:
             print("Usage: rm <uuid>")
@@ -698,6 +786,7 @@ class Repl:
                 "status": "Show vault status.",
                 "add-file": "Import a file. Usage: add-file <path> [--type <type>]",
                 "verify": "Verify blob integrity. Usage: verify <uuid>",
+                "tag": "Manage tags. Usage: tag add <uuid> <tag> [<tag>...] | tag rm <uuid> <tag> [<tag>...] | tag list [--count] | tag rename <old> <new>",
                 "path": "Manage path hierarchy. Usage: path create <path> | path rm <path> | path tree [<path>]",
                 "history": "Show command history.",
                 "help": "Show this help message. Use 'help <command>' for specific help.",
@@ -723,6 +812,7 @@ class Repl:
             ("status (st)", "Show vault status"),
             ("add-file (af)", "Import a file"),
             ("verify (v)", "Verify blob integrity"),
+            ("tag", "Manage tags (add/rm/list/rename)"),
             ("path", "Manage path hierarchy (create/rm/tree)"),
             ("history", "Show command history"),
             ("exit / quit", "Exit the REPL"),
@@ -768,6 +858,23 @@ class Repl:
                 return subs
             if len(parts) >= 3 and parts[1] in subs:
                 return self._complete_path(text)
+            return []
+
+        if cmd == "tag":
+            subs = ["add", "rm", "list", "rename"]
+            if len(parts) == 2:
+                if text:
+                    return [s for s in subs if s.startswith(text)]
+                return subs
+            if len(parts) >= 3:
+                sub = parts[1]
+                if sub in ("add", "rm"):
+                    if len(parts) == 3:
+                        return self._complete_uuid(text)
+                    if sub == "rm":
+                        return self._complete_tag(text)
+                elif sub == "rename":
+                    return self._complete_tag(text)
             return []
 
         if text.startswith("path:"):

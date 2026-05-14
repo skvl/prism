@@ -239,6 +239,87 @@ class TestNodeManager:
         os.unlink(manager.index_path)
         manager._index_remove("test-uuid")
 
+    def test_add_tag(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Tag Me")
+        assert manager.add_tag(meta.uuid, "work") is True
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert "work" in meta2.tags
+
+    def test_add_tag_already_present(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Tagged", tags=["work"])
+        assert manager.add_tag(meta.uuid, "work") is False
+
+    def test_add_tag_invalid(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Bad Tag")
+        with pytest.raises(ValueError, match="Invalid tag"):
+            manager.add_tag(meta.uuid, "bad tag!")
+
+    def test_add_tag_node_not_found(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        with pytest.raises(ValueError, match="Node not found"):
+            manager.add_tag("00000000-0000-0000-0000-000000000000", "work")
+
+    def test_remove_tag(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Remove Tags", tags=["work", "personal"])
+        assert manager.remove_tag(meta.uuid, "work") is True
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert "work" not in meta2.tags
+        assert "personal" in meta2.tags
+
+    def test_remove_tag_not_present(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="No Tag")
+        assert manager.remove_tag(meta.uuid, "nonexistent") is False
+
+    def test_list_tags(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work"])
+        manager.create_node(type_name="note", title="B", tags=["work", "personal"])
+        result = manager.list_tags()
+        assert result == {"personal": 1, "work": 2}
+
+    def test_list_tags_empty(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        assert manager.list_tags() == {}
+
+    def test_rename_tag(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work"])
+        manager.create_node(type_name="note", title="B", tags=["work", "personal"])
+        affected = manager.rename_tag("work", "tasks")
+        assert affected == 2
+        result = manager.list_tags()
+        assert "work" not in result
+        assert result.get("tasks") == 2
+        assert result.get("personal") == 1
+
+    def test_rename_tag_deduplicates(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work", "tasks"])
+        affected = manager.rename_tag("work", "tasks")
+        assert affected == 1
+        result = manager.list_tags()
+        assert result.get("tasks") == 1
+        assert "work" not in result
+
+    def test_rename_tag_invalid_new(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work"])
+        with pytest.raises(ValueError, match="Invalid tag"):
+            manager.rename_tag("work", "bad tag!")
+
+    def test_rename_tag_same_name(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work"])
+        affected = manager.rename_tag("work", "work")
+        assert affected == 0
+
     def test_find_backlinks_with_corrupt_metadata(self, vault_dir):
         bad_uid = str(uuid.uuid4())
         storage_dir = compute_storage_path(vault_dir, bad_uid)

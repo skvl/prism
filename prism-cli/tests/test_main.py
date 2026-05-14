@@ -617,6 +617,119 @@ class TestVerifyCommand:
         assert "CORRUPTED" in result.output
 
 
+# ── Tag Commands ───────────────────────────────────────────────────────
+
+class TestTagCommands:
+    def test_tag_add_no_vault(self, runner):
+        result = runner.invoke(cli, ["--vault", "/nonexistent", "tag", "add", "uuid", "tag"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_tag_add_success(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Tag Me")
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "add", meta.uuid, "work"])
+        assert result.exit_code == 0
+        assert "Added tag:" in result.output
+
+    def test_tag_add_already_present(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Tagged", tags=["work"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "add", meta.uuid, "work"])
+        assert result.exit_code == 0
+        assert "Tag already present" in result.output
+
+    def test_tag_add_invalid(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Bad Tag")
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "add", meta.uuid, "bad tag!"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_tag_add_resolve_error(self, runner, vault_dir):
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "add", "nonexistent", "work"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_tag_add_multiple(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Multi Tag")
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "tag", "add", meta.uuid, "work", "personal", "ideas"]
+        )
+        assert result.exit_code == 0
+        assert "Added tag: work" in result.output
+        assert "Added tag: personal" in result.output
+        assert "Added tag: ideas" in result.output
+
+    def test_tag_rm_no_vault(self, runner):
+        result = runner.invoke(cli, ["--vault", "/nonexistent", "tag", "rm", "uuid", "tag"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_tag_rm_success(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Remove Tag", tags=["work"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "rm", meta.uuid, "work"])
+        assert result.exit_code == 0
+        assert "Removed tag:" in result.output
+
+    def test_tag_rm_not_present(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="No Tag")
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "rm", meta.uuid, "nonexistent"])
+        assert result.exit_code == 0
+        assert "Tag not present" in result.output
+
+    def test_tag_list_no_vault(self, runner):
+        result = runner.invoke(cli, ["--vault", "/nonexistent", "tag", "list"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_tag_list_empty(self, runner, vault_dir):
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "list"])
+        assert result.exit_code == 0
+        assert result.output.strip() == ""
+
+    def test_tag_list_with_tags(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work"])
+        manager.create_node(type_name="note", title="B", tags=["work", "personal"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "list"])
+        assert result.exit_code == 0
+        assert "personal" in result.output
+        assert "work" in result.output
+
+    def test_tag_list_with_count(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work", "personal"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "list", "--count"])
+        assert result.exit_code == 0
+        assert "personal (1)" in result.output
+        assert "work (1)" in result.output
+
+    def test_tag_rename_no_vault(self, runner):
+        result = runner.invoke(cli, ["--vault", "/nonexistent", "tag", "rename", "old", "new"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_tag_rename_success(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work"])
+        manager.create_node(type_name="note", title="B", tags=["work", "personal"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "rename", "work", "tasks"])
+        assert result.exit_code == 0
+        assert "Renamed tag" in result.output
+        assert "2 node(s)" in result.output
+
+    def test_tag_rename_invalid(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="A", tags=["work"])
+        result = runner.invoke(cli, ["--vault", vault_dir, "tag", "rename", "work", "bad tag!"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+
 # ── Link - Metadata Not Found ──────────────────────────────────────────
 
 class TestLinkMetadataNotFound:

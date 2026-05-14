@@ -36,7 +36,7 @@ class Lesson:
     summary: str = ""
 
 
-TOTAL_LESSONS = 7
+TOTAL_LESSONS = 8
 
 
 class Tutor:
@@ -125,7 +125,7 @@ class Tutor:
 
     def _show_final_summary(self) -> None:
         print("=" * 60)
-        print("  Congratulations! You've completed all 7 lessons.")
+        print("  Congratulations! You've completed all 8 lessons.")
         print()
         print("  You now know how to:")
         print("    - Create and initialize a vault")
@@ -134,6 +134,7 @@ class Tutor:
         print("    - Query your vault with tags, types, and full-text search")
         print("    - Import files and verify their integrity")
         print("    - Track changes in your vault")
+        print("    - Manage tags on any node")
         print()
         print("  Next steps:")
         print("    - Run `prism --help` to see all commands")
@@ -256,6 +257,18 @@ class Tutor:
         report = tracker.status()
         return len(report.get("changed", [])) > 0
 
+    def _verify_tag_count(self, vault: Vault, expected: int) -> bool:
+        from prism.node.manager import NodeManager
+        manager = NodeManager(vault.path)
+        tags_dict = manager.list_tags()
+        return len(tags_dict) >= expected
+
+    def _verify_tag_renamed(self, vault: Vault, old_tag: str, new_tag: str) -> bool:
+        from prism.node.manager import NodeManager
+        manager = NodeManager(vault.path)
+        tags_dict = manager.list_tags()
+        return old_tag not in tags_dict and new_tag in tags_dict
+
     def _verify_always_true(self, vault: Vault) -> bool:
         return True
 
@@ -308,7 +321,7 @@ class Tutor:
         self._show_header(lesson.number, lesson.title, TOTAL_LESSONS)
         self._show_concept(lesson.concept)
 
-        if lesson.number == 7 and self.vault:
+        if lesson.number == 8 and self.vault:
             self._write_to_note_body("My first note", "## Ideas\n\n- Learn Prism\n")
             print("  I've written an update to your note. Run `prism status` to see what happened.")
             print()
@@ -327,6 +340,8 @@ class Tutor:
                 self._capture_uuid("Second note", "note2")
             elif lesson.number == 6 and i == 2:
                 self._capture_uuid("hello.txt", "file1")
+            elif lesson.number == 7 and i == 1:
+                self._capture_uuid("Monday notes", "note1")
 
         if lesson.summary:
             self._show_concept(lesson.summary)
@@ -625,6 +640,62 @@ class Tutor:
 
         l7 = Lesson(
             number=7,
+            title="Managing tags",
+            concept="Tags help you organize and find nodes. You can add, remove, list, "
+                    "and rename tags after creating a node. Tags are universal — any "
+                    "node type can carry any tag.",
+            steps=[
+                Step(
+                    number=1,
+                    concept="First, create a couple of notes we can tag. "
+                            "We'll use them to practice tag management.",
+                    command='prism new note "Monday notes" --tag work',
+                    verify=lambda v: self._verify_node_count(v, 1, "note"),
+                    warning="Try: prism new note \"Monday notes\" --tag work",
+                ),
+                Step(
+                    number=2,
+                    concept="Add more tags to an existing node with `prism tag add`. "
+                            "Tags are universal — you can add them to any node.",
+                    command='prism tag add {note1} meeting',
+                    verify=lambda v: self._verify_node_has_tag(v,
+                        self._resolve_uuid("note1"), "meeting"),
+                    warning="Use the UUID from the previous step",
+                ),
+                Step(
+                    number=3,
+                    concept="List all tags in your vault with `prism tag list`. "
+                            "This shows every unique tag across all nodes.",
+                    command="prism tag list",
+                    verify=lambda v: self._verify_tag_count(v, 2),
+                    warning="Try: prism tag list",
+                ),
+                Step(
+                    number=4,
+                    concept="You can remove tags too. `prism tag rm` removes a tag "
+                            "from a node. It's safe — removing a non-existent tag "
+                            "is a no-op.",
+                    command='prism tag rm {note1} meeting',
+                    verify=lambda v: not self._verify_node_has_tag(v,
+                        self._resolve_uuid("note1"), "meeting"),
+                    warning="Use the UUID of your note",
+                ),
+                Step(
+                    number=5,
+                    concept="Tags can be renamed across your entire vault with "
+                            "`prism tag rename`. This updates all nodes at once.",
+                    command='prism tag rename work tasks',
+                    verify=lambda v: self._verify_tag_renamed(v, "work", "tasks"),
+                    warning="Try: prism tag rename work tasks",
+                ),
+            ],
+            summary="You can manage tags on any node at any time: add, remove, "
+                    "list, and rename. Tags are universal and help you organize "
+                    "your vault your way.",
+        )
+
+        l8 = Lesson(
+            number=8,
             title="Your vault is alive",
             concept="Prism watches for changes to your nodes. When you modify a note's "
                     "body or fields, Prism detects it automatically.",
@@ -648,10 +719,10 @@ class Tutor:
             ],
             summary="Your vault is alive! Prism automatically tracks changes to your "
                     "nodes. You've learned the core workflows: create, link, query, "
-                    "import, and track.",
+                    "import, track, and manage tags.",
         )
 
-        return [l1, l2, l3, l4, l5, l6, l7]
+        return [l1, l2, l3, l4, l5, l6, l7, l8]
 
     # --- Main entry ---
 

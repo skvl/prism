@@ -64,6 +64,19 @@ prism new note "Q1 Planning" --add-path /projects/meeting-notes
 
 # Remove a path
 prism path rm /projects/meeting-notes
+
+# Add tags to a node
+prism tag add <uuid> work meeting
+
+# Remove a tag from a node
+prism tag rm <uuid> meeting
+
+# List all tags
+prism tag list
+prism tag list --count
+
+# Rename a tag across all nodes
+prism tag rename work tasks
 ```
 
 ## Commands
@@ -84,6 +97,10 @@ prism path rm /projects/meeting-notes
 | `prism path create <path>` | Create path segments (mkdir -p) |
 | `prism path rm <path>` | Remove a path and its subtree |
 | `prism path tree [path]` | Display path hierarchy as a tree |
+| `prism tag add <uuid> <tag> [<tag>...]` | Add one or more tags to a node |
+| `prism tag rm <uuid> <tag> [<tag>...]` | Remove one or more tags from a node |
+| `prism tag list [--count]` | List all unique tags across the vault |
+| `prism tag rename <old> <new>` | Rename a tag across all nodes |
 | `prism query <query>` | Search nodes |
 | `prism status` | Show vault status |
 | `prism verify <uuid>` | Verify blob integrity |
@@ -126,6 +143,7 @@ The REPL provides:
 | `status` | `st` | Show vault status |
 | `add-file` | `af` | Import a file |
 | `verify` | `v` | Verify blob integrity |
+| `tag` | | Manage tags (add/rm/list/rename) |
 | `history` | | Show command history |
 | `help` | | Show help and aliases |
 | `exit` / `quit` | | Exit the REPL |

@@ -197,6 +197,109 @@ def tree(ctx: click.Context, path_str: str) -> None:
         _render(child.uuid, "", i == len(children) - 1)
 
 
+@cli.group()
+@click.pass_context
+def tag(ctx: click.Context) -> None:
+    """Manage tags on nodes."""
+
+
+@tag.command()
+@click.argument("uuid")
+@click.argument("tags", nargs=-1, required=True)
+@click.pass_context
+def add(ctx: click.Context, uuid: str, tags: tuple[str, ...]) -> None:
+    """Add one or more tags to a node."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+
+    manager = NodeManager(vault.path)
+    try:
+        full_uuid = resolve_uuid(vault.path, uuid)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    for tag_str in tags:
+        try:
+            if manager.add_tag(full_uuid, tag_str):
+                click.echo(f"Added tag: {tag_str}")
+            else:
+                click.echo(f"Tag already present: {tag_str}")
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+
+
+@tag.command()
+@click.argument("uuid")
+@click.argument("tags", nargs=-1, required=True)
+@click.pass_context
+def rm(ctx: click.Context, uuid: str, tags: tuple[str, ...]) -> None:
+    """Remove one or more tags from a node."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+
+    manager = NodeManager(vault.path)
+    try:
+        full_uuid = resolve_uuid(vault.path, uuid)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    for tag_str in tags:
+        if manager.remove_tag(full_uuid, tag_str):
+            click.echo(f"Removed tag: {tag_str}")
+        else:
+            click.echo(f"Tag not present: {tag_str}")
+
+
+@tag.command("list")
+@click.option("--count", is_flag=True, help="Show tag counts")
+@click.pass_context
+def list_tags(ctx: click.Context, count: bool) -> None:
+    """List all unique tags across the vault."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+
+    manager = NodeManager(vault.path)
+    tags_dict = manager.list_tags()
+
+    if not tags_dict:
+        return
+
+    for tag_name, tag_count in tags_dict.items():
+        if count:
+            click.echo(f"{tag_name} ({tag_count})")
+        else:
+            click.echo(tag_name)
+
+
+@tag.command()
+@click.argument("old_tag")
+@click.argument("new_tag")
+@click.pass_context
+def rename(ctx: click.Context, old_tag: str, new_tag: str) -> None:
+    """Rename a tag across all nodes."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+
+    manager = NodeManager(vault.path)
+    try:
+        affected = manager.rename_tag(old_tag, new_tag)
+        click.echo(f"Renamed tag '{old_tag}' to '{new_tag}' across {affected} node(s)")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
 def _write_builtin_types(vault: Vault) -> None:
     from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML, PATH_TOML
 

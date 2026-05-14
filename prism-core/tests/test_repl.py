@@ -138,6 +138,43 @@ class TestReplFullMode:
         captured = capsys.readouterr()
         assert "Linked" in captured.out
 
+    def test_tag_add_command(self, repl, capsys):
+        repl._handle_line("new note TagTest --tag work")
+        uid = repl.last_uuid
+        repl._handle_line(f"tag add {uid} personal")
+        captured = capsys.readouterr()
+        assert "Added tag: personal" in captured.out
+
+    def test_tag_rm_command(self, repl, capsys):
+        repl._handle_line("new note TagRmTest --tag work")
+        uid = repl.last_uuid
+        repl._handle_line(f"tag rm {uid} work")
+        captured = capsys.readouterr()
+        assert "Removed tag: work" in captured.out
+
+    def test_tag_list_command(self, repl, capsys):
+        repl._handle_line("new note TagListTest --tag work")
+        repl._handle_line("tag list")
+        captured = capsys.readouterr()
+        assert "work" in captured.out
+
+    def test_tag_list_count_command(self, repl, capsys):
+        repl._handle_line("new note TagCountTest --tag work")
+        repl._handle_line("tag list --count")
+        captured = capsys.readouterr()
+        assert "work (1)" in captured.out
+
+    def test_tag_rename_command(self, repl, capsys):
+        repl._handle_line("new note TagRenameTest --tag work")
+        repl._handle_line("tag rename work tasks")
+        captured = capsys.readouterr()
+        assert "Renamed tag" in captured.out
+
+    def test_tag_help(self, repl, capsys):
+        repl._handle_line("help tag")
+        captured = capsys.readouterr()
+        assert "manage tags" in captured.out.lower()
+
     def test_backlinks_command(self, repl, capsys):
         repl._handle_line("new note BLSource")
         repl._handle_line("new note BLTarget")
