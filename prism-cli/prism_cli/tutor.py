@@ -59,7 +59,7 @@ class Tutor:
         return None
 
     def _write_builtin_types(self, vault: Vault) -> None:
-        from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML
+        from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
 
         types_dir = os.path.join(vault.path, ".metadata", "types")
         os.makedirs(types_dir, exist_ok=True)
@@ -69,6 +69,7 @@ class Tutor:
             "contact.toml": CONTACT_TOML,
             "bookmark.toml": BOOKMARK_TOML,
             "file.toml": FILE_TOML,
+            "path.toml": PATH_TOML,
         }
         for fname, content in types.items():
             path = os.path.join(types_dir, fname)

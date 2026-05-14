@@ -4,7 +4,7 @@ from typing import Optional
 
 from prism.node.manager import NodeManager, resolve_uuid
 from prism.node.metadata import NodeMetadata
-from prism.node.storage import sha256_file
+from prism.node.storage import compute_storage_path, sha256_file
 from prism.graph.links import LinkExtractor, BacklinkIndex, GraphExporter
 from prism.path.resolver import PathResolver
 from prism.query.parser import QueryParser
@@ -35,7 +35,7 @@ UNSUPPORTED_IN_REPL = {"tutor"}
 
 
 def _write_builtin_types(vault: Vault) -> None:
-    from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML
+    from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
 
     types_dir = os.path.join(vault.path, ".metadata", "types")
     os.makedirs(types_dir, exist_ok=True)
@@ -45,6 +45,7 @@ def _write_builtin_types(vault: Vault) -> None:
         "contact.toml": CONTACT_TOML,
         "bookmark.toml": BOOKMARK_TOML,
         "file.toml": FILE_TOML,
+        "path.toml": PATH_TOML,
     }
     for fname, content in types.items():
         path = os.path.join(types_dir, fname)
@@ -158,6 +159,7 @@ class Repl:
             "verify": self._cmd_verify,
             "help": self._cmd_help,
             "history": self._cmd_history,
+            "path": self._cmd_path,
         }
 
         handler = dispatch.get(cmd)
@@ -191,17 +193,21 @@ class Repl:
 
     def _cmd_new(self, args: list[str]) -> None:
         if not args:
-            print("Usage: new <type> [title] [--tag <tag> ...] [--field=value ...]")
+            print("Usage: new <type> [title] [--tag <tag> ...] [--add-path <path>] [--field=value ...]")
             return
 
         type_name = args[0]
         title = ""
         tags: list[str] = []
+        add_path: Optional[str] = None
         extra: list[str] = []
         i = 1
         while i < len(args):
             if args[i] == "--tag" and i + 1 < len(args):
                 tags.append(args[i + 1])
+                i += 2
+            elif args[i] in ("--add-path", "-a") and i + 1 < len(args):
+                add_path = args[i + 1]
                 i += 2
             elif args[i].startswith("--") and "=" in args[i]:
                 extra.append(args[i])
@@ -226,6 +232,18 @@ class Repl:
             )
             self.last_uuid = meta.uuid
             print(f"Created {type_name} node: {meta.uuid}")
+            if add_path:
+                resolver = PathResolver(self.vault.path)
+                try:
+                    path_uuid = resolver.resolve(add_path)
+                except ValueError:
+                    print(f"Path does not exist: {add_path}")
+                else:
+                    meta.paths.append(path_uuid)
+                    storage_dir = compute_storage_path(self.vault.path, meta.uuid)
+                    meta_path = NodeMetadata.metadata_path(storage_dir)
+                    meta.save(meta_path)
+                    print(f"Added path: {add_path}")
         except ValueError as e:
             print(f"Error: {e}")
 
@@ -243,12 +261,27 @@ class Repl:
 
     def _cmd_edit(self, args: list[str]) -> None:
         if not args:
-            print("Usage: edit <uuid>")
+            print("Usage: edit <uuid> [--add-path <path>] [--remove-path <path>]")
             return
         assert self.vault is not None
+
+        uuid_arg = args[0]
+        add_path: Optional[str] = None
+        remove_path: Optional[str] = None
+        i = 1
+        while i < len(args):
+            if args[i] in ("--add-path", "-a") and i + 1 < len(args):
+                add_path = args[i + 1]
+                i += 2
+            elif args[i] in ("--remove-path", "-r") and i + 1 < len(args):
+                remove_path = args[i + 1]
+                i += 2
+            else:
+                i += 1
+
         manager = NodeManager(self.vault.path)
         try:
-            full_uuid = resolve_uuid(self.vault.path, args[0])
+            full_uuid = resolve_uuid(self.vault.path, uuid_arg)
         except ValueError as e:
             print(f"Error: {e}")
             return
@@ -269,10 +302,41 @@ class Repl:
                 break
 
         if meta_path is None:
-            print(f"Node not found: {args[0]}")
+            print(f"Node not found: {uuid_arg}")
             return
 
         meta = NodeMetadata.from_toml(meta_path)
+
+        if add_path is not None:
+            try:
+                path_uuid = PathResolver(self.vault.path).resolve(add_path)
+            except ValueError:
+                print(f"Path does not exist: {add_path}")
+                return
+            if path_uuid not in meta.paths:
+                meta.paths.append(path_uuid)
+                meta.sync_dirty = True
+                meta.save(meta_path)
+                print(f"Added path: {add_path}")
+            else:
+                print("Node already associated with this path.")
+            return
+
+        if remove_path is not None:
+            try:
+                path_uuid = PathResolver(self.vault.path).resolve(remove_path)
+            except ValueError:
+                print(f"Path does not exist: {remove_path}")
+                return
+            if path_uuid in meta.paths:
+                meta.paths = [p for p in meta.paths if p != path_uuid]
+                meta.sync_dirty = True
+                meta.save(meta_path)
+                print(f"Removed path: {remove_path}")
+            else:
+                print("Node not associated with this path.")
+            return
+
         if meta.blob_extension == "md":
             if manager.edit_node_body(meta.uuid):
                 body_root = os.path.dirname(meta_path)
@@ -291,6 +355,103 @@ class Repl:
                 self.last_uuid = meta.uuid
             else:
                 print("No changes detected.")
+
+    def _cmd_path(self, args: list[str]) -> None:
+        if not args:
+            print("Usage: path create <path> | path rm <path> | path tree [<path>]")
+            return
+        assert self.vault is not None
+        resolver = PathResolver(self.vault.path)
+        sub = args[0].lower()
+
+        if sub == "create":
+            if len(args) < 2:
+                print("Usage: path create <path>")
+                return
+            try:
+                leaf_uuid = resolver.resolve_or_create(args[1])
+                print(f"Path created: {args[1]}")
+                print(f"Leaf UUID: {leaf_uuid}")
+            except ValueError as e:
+                print(f"Error: {e}")
+
+        elif sub == "rm":
+            if len(args) < 2:
+                print("Usage: path rm <path>")
+                return
+            try:
+                leaf_uuid = resolver.resolve(args[1])
+            except ValueError as e:
+                print(f"Error: {e}")
+                return
+            descendants = resolver.collect_descendants(leaf_uuid)
+            all_uuids = [leaf_uuid] + descendants
+            manager = NodeManager(self.vault.path)
+            nodes = manager.list_nodes()
+            for n in nodes:
+                matching = [p for p in all_uuids if p in n.paths]
+                if matching:
+                    n.paths = [p for p in n.paths if p not in all_uuids]
+                    storage_dir = compute_storage_path(self.vault.path, n.uuid)
+                    meta_path = NodeMetadata.metadata_path(storage_dir)
+                    n.save(meta_path)
+            import shutil
+            for uid in all_uuids:
+                sdir = compute_storage_path(self.vault.path, uid)
+                if os.path.exists(sdir):
+                    shutil.rmtree(sdir)
+            print(f"Removed path: {args[1]}")
+
+        elif sub == "tree":
+            path_str = args[1] if len(args) > 1 else ""
+            try:
+                root_uuid = resolver.resolve(path_str if path_str else "/")
+            except ValueError as e:
+                print(f"Error: {e}")
+                return
+
+            nodes = resolver._all_nodes()
+            nodes_by_uuid = {n.uuid: n for n in nodes}
+
+            root_node = nodes_by_uuid.get(root_uuid)
+            if root_node is None:
+                print("No path found.")
+                return
+
+            def _count_referencing(uuid: str) -> int:
+                return sum(1 for n in nodes if uuid in n.paths)
+
+            def _render(uuid: str, prefix: str = "", is_last: bool = True) -> None:
+                node = nodes_by_uuid.get(uuid)
+                if node is None:
+                    return
+                name = node.fields.get("name", node.title or uuid[:8])
+                ref_count = _count_referencing(uuid)
+                suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
+                connector = "└── " if is_last else "├── "
+                print(f"{prefix}{connector}{name}{suffix}")
+                children = sorted(
+                    resolver._find_children(uuid, nodes),
+                    key=lambda c: c.fields.get("name", ""),
+                )
+                child_prefix = prefix + ("    " if is_last else "│   ")
+                for i, child in enumerate(children):
+                    _render(child.uuid, child_prefix, i == len(children) - 1)
+
+            name = root_node.fields.get("name", "/")
+            ref_count = _count_referencing(root_uuid)
+            suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
+            print(f"{name}{suffix}")
+            children = sorted(
+                resolver._find_children(root_uuid, nodes),
+                key=lambda c: c.fields.get("name", ""),
+            )
+            for i, child in enumerate(children):
+                _render(child.uuid, "", i == len(children) - 1)
+
+        else:
+            print(f"Unknown path subcommand: {sub}")
+            print("Usage: path create <path> | path rm <path> | path tree [<path>]")
 
     def _cmd_rm(self, args: list[str]) -> None:
         if not args:
@@ -526,9 +687,9 @@ class Repl:
             help_texts = {
                 "init": "Initialize a new vault at the given path.",
                 "open": "Open an existing vault.",
-                "new": "Create a new typed node. Usage: new <type> [title] [--tag <tag> ...]",
+                "new": "Create a new typed node. Usage: new <type> [title] [--tag <tag> ...] [--add-path <path>]",
                 "show": "Display node details. Usage: show <uuid>",
-                "edit": "Edit a node's body or fields. Usage: edit <uuid>",
+                "edit": "Edit a node's body or fields. Usage: edit <uuid> [--add-path <path>] [--remove-path <path>]",
                 "rm": "Delete a node. Usage: rm <uuid>",
                 "query": "Search nodes. Usage: query <query>",
                 "link": "Create a directed link. Usage: link <source> <target>",
@@ -537,6 +698,7 @@ class Repl:
                 "status": "Show vault status.",
                 "add-file": "Import a file. Usage: add-file <path> [--type <type>]",
                 "verify": "Verify blob integrity. Usage: verify <uuid>",
+                "path": "Manage path hierarchy. Usage: path create <path> | path rm <path> | path tree [<path>]",
                 "history": "Show command history.",
                 "help": "Show this help message. Use 'help <command>' for specific help.",
                 "exit": "Exit the REPL.",
@@ -561,6 +723,7 @@ class Repl:
             ("status (st)", "Show vault status"),
             ("add-file (af)", "Import a file"),
             ("verify (v)", "Verify blob integrity"),
+            ("path", "Manage path hierarchy (create/rm/tree)"),
             ("history", "Show command history"),
             ("exit / quit", "Exit the REPL"),
         ]
@@ -597,6 +760,16 @@ class Repl:
 
         cmd = ALIASES.get(parts[0], parts[0])
 
+        if cmd == "path":
+            subs = ["create", "rm", "tree"]
+            if len(parts) == 2:
+                if text:
+                    return [s for s in subs if s.startswith(text)]
+                return subs
+            if len(parts) >= 3 and parts[1] in subs:
+                return self._complete_path(text)
+            return []
+
         if text.startswith("path:"):
             return self._complete_path(text)
 
@@ -612,7 +785,7 @@ class Repl:
         return self._complete_uuid(text)
 
     def _complete_command(self, text: str) -> list[str]:
-        all_commands = sorted(set(list(ALIASES.keys()) + list(ALIASES.values()) + list(UNSUPPORTED_IN_REPL) + ["init", "open", "help", "history", "exit", "quit", "rm"]))
+        all_commands = sorted(set(list(ALIASES.keys()) + list(ALIASES.values()) + list(UNSUPPORTED_IN_REPL) + ["init", "open", "help", "history", "exit", "quit", "rm", "path"]))
         if not text:
             return all_commands
         return [c for c in all_commands if c.startswith(text)]
