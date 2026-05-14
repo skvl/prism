@@ -1,7 +1,5 @@
 import os
 import shutil
-import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -119,63 +117,57 @@ class NodeManager:
 
         return meta
 
-    def edit_node_body(self, uid: str) -> bool:
+    def get_body_info(self, uid: str) -> tuple[str, float] | None:
+        uid = self._resolve_uuid(uid)
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        if not meta.blob_extension:
+            return None
+        body_path = os.path.join(storage_dir, f"data.{meta.blob_extension}")
+        if not os.path.exists(body_path):
+            return None
+        return (body_path, os.stat(body_path).st_mtime)
+
+    def commit_body_edit(self, uid: str, mtime: float, size: int, sha256: str) -> None:
+        from prism.graph.links import LinkExtractor
+
         uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         meta = NodeMetadata.from_toml(meta_path)
+        meta.blob_mtime = str(mtime)
+        meta.blob_size = size
+        meta.blob_sha256 = sha256
+        meta.updated_at = datetime.now(timezone.utc).isoformat()
+        meta.sync_dirty = True
+        if meta.blob_extension == "md":
+            body_path = os.path.join(storage_dir, f"data.{meta.blob_extension}")
+            if os.path.exists(body_path):
+                meta.links = LinkExtractor.extract_from_file(body_path)
+        meta.save(meta_path)
 
-        body_path = os.path.join(storage_dir, f"data.{meta.blob_extension}") if meta.blob_extension else None
-        if not body_path or not os.path.exists(body_path):
+    def get_field_info(self, uid: str) -> tuple[TypeSchema, dict[str, Any]]:
+        uid = self._resolve_uuid(uid)
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        schema = self.type_loader.load(meta.type)
+        if schema is None:
+            raise ValueError(f"Unknown type: {meta.type}")
+        return (schema, dict(meta.fields))
+
+    def update_node_fields(self, uid: str, changes: dict[str, Any]) -> bool:
+        if not changes:
             return False
-
-        original_mtime = os.stat(body_path).st_mtime
-
-        editor = os.environ.get("EDITOR", "vi")
-        subprocess.call([editor, body_path])
-
-        new_mtime = os.stat(body_path).st_mtime
-        if new_mtime == original_mtime:
-            print("No changes detected")
-            return False
-
-        meta.blob_mtime = str(new_mtime)
-        meta.blob_size = os.stat(body_path).st_size
-        meta.blob_sha256 = sha256_file(body_path)
+        uid = self._resolve_uuid(uid)
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        meta = NodeMetadata.from_toml(meta_path)
+        for k, v in changes.items():
+            meta.fields[k] = v
         meta.updated_at = datetime.now(timezone.utc).isoformat()
         meta.sync_dirty = True
         meta.save(meta_path)
         return True
-
-    def edit_node_fields(self, uid: str) -> bool:
-        uid = self._resolve_uuid(uid)
-        storage_dir = compute_storage_path(self.vault_path, uid)
-        meta_path = NodeMetadata.metadata_path(storage_dir)
-        meta = NodeMetadata.from_toml(meta_path)
-
-        schema = self.type_loader.load(meta.type)
-        if schema is None:
-            print(f"Unknown type: {meta.type}")
-            return False
-
-        changed = False
-        for field_def in schema.fields:
-            current = meta.fields.get(field_def.name, "")
-            try:
-                new_val = input(f"Enter new {field_def.name} or press ENTER to keep [{current}]: ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if new_val:
-                meta.fields[field_def.name] = new_val
-                changed = True
-
-        if changed:
-            meta.updated_at = datetime.now(timezone.utc).isoformat()
-            meta.sync_dirty = True
-            meta.save(meta_path)
-
-        return changed
 
     def delete_node(self, uid: str, force: bool = False) -> bool:
         uid = self._resolve_uuid(uid)
@@ -183,16 +175,13 @@ class NodeManager:
         if not os.path.exists(storage_dir):
             return False
 
-        backlinks = self._find_backlinks(uid)
-        if backlinks and not force:
-            print(f"Warning: {len(backlinks)} node(s) link to this node. Links will become unresolved.")
-            try:
-                confirm = input("Delete anyway? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                return False
-            if confirm != "y":
-                return False
+        if not force:
+            backlinks = self._find_backlinks(uid)
+            if backlinks:
+                raise ValueError(
+                    f"{len(backlinks)} node(s) link to this node. "
+                    "Use --yes to force deletion."
+                )
 
         shutil.rmtree(storage_dir)
         self._index_remove(uid)
@@ -292,6 +281,36 @@ class NodeManager:
 
     def list_nodes(self) -> list[NodeMetadata]:
         return _list_all_nodes(self.vault_path)
+
+    def add_path_to_node(self, uid: str, path_str: str) -> bool:
+        uid = self._resolve_uuid(uid)
+        resolver = PathResolver(self.vault_path)
+        path_uuid = resolver.resolve(path_str)
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        meta = NodeMetadata.from_toml(meta_path)
+        if path_uuid in meta.paths:
+            return False
+        meta.paths.append(path_uuid)
+        meta.updated_at = datetime.now(timezone.utc).isoformat()
+        meta.sync_dirty = True
+        meta.save(meta_path)
+        return True
+
+    def remove_path_from_node(self, uid: str, path_str: str) -> bool:
+        uid = self._resolve_uuid(uid)
+        resolver = PathResolver(self.vault_path)
+        path_uuid = resolver.resolve(path_str)
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        meta = NodeMetadata.from_toml(meta_path)
+        if path_uuid not in meta.paths:
+            return False
+        meta.paths = [p for p in meta.paths if p != path_uuid]
+        meta.updated_at = datetime.now(timezone.utc).isoformat()
+        meta.sync_dirty = True
+        meta.save(meta_path)
+        return True
 
     def add_tag(self, uid: str, tag: str) -> bool:
         uid = self._resolve_uuid(uid)

@@ -249,32 +249,44 @@ class TestEditCommand:
     def test_markdown_body_updated(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Editable")
-        with patch("prism.node.manager.NodeManager.edit_node_body", return_value=True):
-            result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        body_path = os.path.join(storage_dir, "data.md")
+        with patch("prism.node.manager.NodeManager.get_body_info", return_value=(body_path, 100.0)):
+            with patch("subprocess.call"):
+                result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
         assert result.exit_code == 0
         assert "Body updated." in result.output
 
     def test_markdown_no_changes(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="No Change")
-        with patch("prism.node.manager.NodeManager.edit_node_body", return_value=False):
-            result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        body_path = os.path.join(storage_dir, "data.md")
+        with patch("prism.node.manager.NodeManager.get_body_info", return_value=(body_path, os.stat(body_path).st_mtime)):
+            with patch("subprocess.call"):
+                result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
         assert result.exit_code == 0
         assert "No changes detected." in result.output
 
     def test_fields_updated(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="contact", title="Edit Me", fields={"name": "Old"})
-        with patch("prism.node.manager.NodeManager.edit_node_fields", return_value=True):
-            result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
+        schema = manager.type_loader.load("contact")
+        with patch("prism.node.manager.NodeManager.get_body_info", return_value=None):
+            with patch("prism.node.manager.NodeManager.get_field_info", return_value=(schema, {"name": "Old"})):
+                with patch("prism.node.manager.NodeManager.update_node_fields", return_value=True):
+                    result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n")
         assert result.exit_code == 0
         assert "Fields updated." in result.output
 
     def test_fields_no_changes(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="contact", title="No Change", fields={"name": "Same"})
-        with patch("prism.node.manager.NodeManager.edit_node_fields", return_value=False):
-            result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
+        schema = manager.type_loader.load("contact")
+        with patch("prism.node.manager.NodeManager.get_body_info", return_value=None):
+            with patch("prism.node.manager.NodeManager.get_field_info", return_value=(schema, {"name": "Same"})):
+                with patch("prism.node.manager.NodeManager.update_node_fields", return_value=False):
+                    result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n")
         assert result.exit_code == 0
         assert "No changes detected." in result.output
 
@@ -286,8 +298,11 @@ class TestEditCommand:
             f.write("not valid toml {{\n")
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Valid")
-        with patch("prism.node.manager.NodeManager.edit_node_body", return_value=True):
-            result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        body_path = os.path.join(storage_dir, "data.md")
+        with patch("prism.node.manager.NodeManager.get_body_info", return_value=(body_path, 100.0)):
+            with patch("subprocess.call"):
+                result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
         assert result.exit_code == 0
         assert "Body updated." in result.output
 

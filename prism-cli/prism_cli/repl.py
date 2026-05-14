@@ -5,7 +5,7 @@ from typing import Optional
 from prism.node.manager import NodeManager, resolve_uuid
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path, sha256_file
-from prism.graph.links import LinkExtractor, BacklinkIndex, GraphExporter
+from prism.graph.links import BacklinkIndex, GraphExporter
 from prism.path.resolver import PathResolver
 from prism.query.parser import QueryParser
 from prism.query.engine import QueryEngine
@@ -287,73 +287,60 @@ class Repl:
             print(f"Error: {e}")
             return
 
-        storage_dir = os.path.join(self.vault.path, ".storage")
-        meta_path = None
-        for root, _dirs, files in os.walk(storage_dir):
-            for fname in files:
-                if fname == "metadata.toml":
-                    try:
-                        meta = NodeMetadata.from_toml(os.path.join(root, fname))
-                        if meta.uuid == full_uuid:
-                            meta_path = os.path.join(root, fname)
-                            break
-                    except Exception:
-                        continue
-            if meta_path:
-                break
-
-        if meta_path is None:
-            print(f"Node not found: {uuid_arg}")
-            return
-
-        meta = NodeMetadata.from_toml(meta_path)
-
         if add_path is not None:
             try:
-                path_uuid = PathResolver(self.vault.path).resolve(add_path)
-            except ValueError:
-                print(f"Path does not exist: {add_path}")
-                return
-            if path_uuid not in meta.paths:
-                meta.paths.append(path_uuid)
-                meta.sync_dirty = True
-                meta.save(meta_path)
-                print(f"Added path: {add_path}")
-            else:
-                print("Node already associated with this path.")
+                if manager.add_path_to_node(full_uuid, add_path):
+                    print(f"Added path: {add_path}")
+                else:
+                    print("Node already associated with this path.")
+            except ValueError as e:
+                print(f"Error: {e}")
             return
 
         if remove_path is not None:
             try:
-                path_uuid = PathResolver(self.vault.path).resolve(remove_path)
-            except ValueError:
-                print(f"Path does not exist: {remove_path}")
-                return
-            if path_uuid in meta.paths:
-                meta.paths = [p for p in meta.paths if p != path_uuid]
-                meta.sync_dirty = True
-                meta.save(meta_path)
-                print(f"Removed path: {remove_path}")
-            else:
-                print("Node not associated with this path.")
+                if manager.remove_path_from_node(full_uuid, remove_path):
+                    print(f"Removed path: {remove_path}")
+                else:
+                    print("Node not associated with this path.")
+            except ValueError as e:
+                print(f"Error: {e}")
             return
 
-        if meta.blob_extension == "md":
-            if manager.edit_node_body(meta.uuid):
-                body_root = os.path.dirname(meta_path)
-                body_path = os.path.join(body_root, f"data.{meta.blob_extension}")
-                if os.path.exists(body_path):
-                    new_links = LinkExtractor.extract_from_file(body_path)
-                    meta.links = new_links
-                    meta.save(meta_path)
-                print("Body updated.")
-                self.last_uuid = meta.uuid
-            else:
+        body_info = manager.get_body_info(full_uuid)
+        if body_info is not None:
+            body_path, original_mtime = body_info
+            editor = os.environ.get("EDITOR", "vi")
+            import subprocess
+            subprocess.call([editor, body_path])
+            new_mtime = os.stat(body_path).st_mtime
+            if new_mtime == original_mtime:
                 print("No changes detected.")
+                return
+            new_size = os.stat(body_path).st_size
+            new_sha256 = sha256_file(body_path)
+            manager.commit_body_edit(full_uuid, new_mtime, new_size, new_sha256)
+            print("Body updated.")
+            self.last_uuid = full_uuid
         else:
-            if manager.edit_node_fields(meta.uuid):
+            try:
+                schema, current_values = manager.get_field_info(full_uuid)
+            except ValueError as e:
+                print(f"Error: {e}")
+                return
+            changes: dict[str, Any] = {}
+            for field_def in schema.fields:
+                current = current_values.get(field_def.name, "")
+                try:
+                    new_val = input(f"Enter new {field_def.name} or press ENTER to keep [{current}]: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    break
+                if new_val:
+                    changes[field_def.name] = new_val
+            if manager.update_node_fields(full_uuid, changes):
                 print("Fields updated.")
-                self.last_uuid = meta.uuid
+                self.last_uuid = full_uuid
             else:
                 print("No changes detected.")
 

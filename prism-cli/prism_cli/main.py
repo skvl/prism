@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-from datetime import datetime, timezone
 from typing import Optional
 
 import click
@@ -13,7 +12,7 @@ from prism.vault.context import detect_vault
 from prism.node.manager import NodeManager, resolve_uuid, _list_all_nodes
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import sha256_file
-from prism.graph.links import LinkExtractor, BacklinkIndex, GraphExporter
+from prism.graph.links import BacklinkIndex, GraphExporter
 from prism.path.resolver import PathResolver
 from prism.query.parser import QueryParser
 from prism.query.engine import QueryEngine
@@ -494,75 +493,63 @@ def edit(ctx: click.Context, uuid: str, add_path: Optional[str], remove_path: Op
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
-    storage_dir = os.path.join(vault.path, ".storage")
-    meta_path = None
-    for root, _dirs, files in os.walk(storage_dir):
-        for fname in files:
-            if fname == "metadata.toml":
-                try:
-                    meta = NodeMetadata.from_toml(os.path.join(root, fname))
-                    if meta.uuid == full_uuid:
-                        meta_path = os.path.join(root, fname)
-                        break
-                except Exception:
-                    continue
-        if meta_path:
-            break
-
-    if meta_path is None:
-        click.echo(f"Node not found: {uuid}", err=True)
-        sys.exit(1)
-
-    meta = NodeMetadata.from_toml(meta_path)
-
-    resolver = PathResolver(vault.path)
-
     if add_path is not None:
         try:
-            path_uuid = resolver.resolve(add_path)
-        except ValueError:
-            click.echo("Error: Path does not exist", err=True)
+            if manager.add_path_to_node(full_uuid, add_path):
+                click.echo(f"Added path: {add_path}")
+            else:
+                click.echo("Node already associated with this path.")
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
             sys.exit(1)
-        if path_uuid not in meta.paths:
-            meta.paths.append(path_uuid)
-            meta.updated_at = datetime.now(timezone.utc).isoformat()
-            meta.sync_dirty = True
-            meta.save(meta_path)
-            click.echo(f"Added path: {add_path}")
-        else:
-            click.echo("Node already associated with this path.")
         return
 
     if remove_path is not None:
         try:
-            path_uuid = resolver.resolve(remove_path)
-        except ValueError:
-            click.echo("Error: Path does not exist", err=True)
+            if manager.remove_path_from_node(full_uuid, remove_path):
+                click.echo(f"Removed path: {remove_path}")
+            else:
+                click.echo("Node not associated with this path.")
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
             sys.exit(1)
-        if path_uuid in meta.paths:
-            meta.paths = [p for p in meta.paths if p != path_uuid]
-            meta.updated_at = datetime.now(timezone.utc).isoformat()
-            meta.sync_dirty = True
-            meta.save(meta_path)
-            click.echo(f"Removed path: {remove_path}")
-        else:
-            click.echo("Node not associated with this path.")
         return
 
-    if meta.blob_extension == "md":
-        if manager.edit_node_body(meta.uuid):
-            from prism.graph.links import LinkExtractor
-            body_root = os.path.dirname(meta_path)
-            body_path = os.path.join(body_root, f"data.{meta.blob_extension}")
-            if os.path.exists(body_path):
-                new_links = LinkExtractor.extract_from_file(body_path)
-                meta.links = new_links
-                meta.save(meta_path)
-            click.echo("Body updated.")
-        else:
+    try:
+        body_info = manager.get_body_info(full_uuid)
+    except (FileNotFoundError, OSError):
+        click.echo(f"Node not found: {uuid}", err=True)
+        sys.exit(1)
+    if body_info is not None:
+        body_path, original_mtime = body_info
+        editor = os.environ.get("EDITOR", "vi")
+        import subprocess
+        subprocess.call([editor, body_path])
+        new_mtime = os.stat(body_path).st_mtime
+        if new_mtime == original_mtime:
             click.echo("No changes detected.")
+            return
+        new_size = os.stat(body_path).st_size
+        new_sha256 = sha256_file(body_path)
+        manager.commit_body_edit(full_uuid, new_mtime, new_size, new_sha256)
+        click.echo("Body updated.")
     else:
-        if manager.edit_node_fields(meta.uuid):
+        try:
+            schema, current_values = manager.get_field_info(full_uuid)
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+        changes: dict[str, Any] = {}
+        for field_def in schema.fields:
+            current = current_values.get(field_def.name, "")
+            try:
+                new_val = input(f"Enter new {field_def.name} or press ENTER to keep [{current}]: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if new_val:
+                changes[field_def.name] = new_val
+        if manager.update_node_fields(full_uuid, changes):
             click.echo("Fields updated.")
         else:
             click.echo("No changes detected.")
@@ -580,11 +567,24 @@ def rm(ctx: click.Context, uuid: str, yes: bool) -> None:
         sys.exit(1)
 
     manager = NodeManager(vault.path)
-    if manager.delete_node(uuid, force=yes):
-        click.echo(f"Deleted node {uuid}")
-    else:
-        click.echo(f"Node not found: {uuid}", err=True)
-        sys.exit(1)
+    try:
+        if manager.delete_node(uuid, force=yes):
+            click.echo(f"Deleted node {uuid}")
+        else:
+            click.echo(f"Node not found: {uuid}", err=True)
+            sys.exit(1)
+    except ValueError as e:
+        click.echo(f"Warning: {e}", err=True)
+        click.echo("Delete anyway? [y/N]: ", nl=False)
+        try:
+            confirm = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            confirm = "n"
+        if confirm == "y":
+            manager.delete_node(uuid, force=True)
+            click.echo(f"Deleted node {uuid}")
+        else:
+            click.echo("Aborted.")
 
 
 @cli.command()

@@ -372,3 +372,224 @@ class TestNodeManager:
         output = manager.show_node(meta.uuid)
         assert output is not None
         assert "/mypath" in output
+
+    def test_get_body_info_existing(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Body Test")
+        result = manager.get_body_info(meta.uuid)
+        assert result is not None
+        path, mtime = result
+        assert path.endswith("data.md")
+        assert os.path.exists(path)
+        assert isinstance(mtime, float)
+
+    def test_get_body_info_no_blob_extension(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="contact", title="No Body",
+                                    fields={"name": "X", "email": "x@x"})
+        result = manager.get_body_info(meta.uuid)
+        assert result is None
+
+    def test_get_body_info_nonexistent_body_file(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Missing Body")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        os.unlink(os.path.join(storage_dir, "data.md"))
+        result = manager.get_body_info(meta.uuid)
+        assert result is None
+
+    def test_commit_body_edit_md_with_link_extraction(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Link Extract")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        body_path = os.path.join(storage_dir, "data.md")
+        target_uuid = "aaaaaaaa-0000-0000-0000-000000000000"
+        with open(body_path, "w") as f:
+            f.write(f"[[{target_uuid}]]\n")
+        stat_info = os.stat(body_path)
+        manager.commit_body_edit(meta.uuid, stat_info.st_mtime, stat_info.st_size, "abc123")
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert len(meta2.links) == 1
+        assert meta2.links[0]["target"] == target_uuid
+
+    def test_commit_body_edit_non_md_no_link_extraction(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        blob_path = os.path.join(vault_dir, "test.txt")
+        with open(blob_path, "w") as f:
+            f.write("plain text")
+        meta = manager.create_node(type_name="note", title="Non MD", blob_path=blob_path)
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        body_path = os.path.join(storage_dir, "data.txt")
+        with open(body_path, "w") as f:
+            f.write("[[some-uuid]]\n")
+        stat_info = os.stat(body_path)
+        manager.commit_body_edit(meta.uuid, stat_info.st_mtime, stat_info.st_size, "def456")
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.links == []
+
+    def test_commit_body_edit_links_updated(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Link Update")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        body_path = os.path.join(storage_dir, "data.md")
+        old_uuid = "bbbbbbbb-0000-0000-0000-000000000001"
+        with open(body_path, "w") as f:
+            f.write(f"[[{old_uuid}]]\n")
+        stat_info = os.stat(body_path)
+        manager.commit_body_edit(meta.uuid, stat_info.st_mtime, stat_info.st_size, "ghi789")
+        new_uuid = "cccccccc-0000-0000-0000-000000000002"
+        with open(body_path, "w") as f:
+            f.write(f"[[{new_uuid}]]\n")
+        stat_info2 = os.stat(body_path)
+        manager.commit_body_edit(meta.uuid, stat_info2.st_mtime, stat_info2.st_size, "jkl012")
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert len(meta2.links) == 1
+        assert meta2.links[0]["target"] == new_uuid
+
+    def test_get_field_info_existing(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="contact", title="Field Test",
+                                    fields={"name": "Alice", "email": "a@b"})
+        schema, values = manager.get_field_info(meta.uuid)
+        assert schema.name == "contact"
+        assert values["name"] == "Alice"
+        assert values["email"] == "a@b"
+
+    def test_get_field_info_nonexistent_type(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Bad Type")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        meta_from_disk = NodeMetadata.from_toml(meta_path)
+        meta_from_disk.type = "nonexistent"
+        meta_from_disk.save(meta_path)
+        with pytest.raises(ValueError, match="Unknown type"):
+            manager.get_field_info(meta.uuid)
+
+    def test_update_node_fields_single(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="contact", title="Single Update",
+                                    fields={"name": "Old", "email": "o@o"})
+        assert manager.update_node_fields(meta.uuid, {"name": "New"}) is True
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.fields["name"] == "New"
+        assert meta2.fields["email"] == "o@o"
+
+    def test_update_node_fields_multiple(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="contact", title="Multi Update",
+                                    fields={"name": "A", "email": "a@a"})
+        assert manager.update_node_fields(meta.uuid, {"name": "B", "email": "b@b"}) is True
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.fields["name"] == "B"
+        assert meta2.fields["email"] == "b@b"
+
+    def test_update_node_fields_empty_changes(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="contact", title="Empty Update",
+                                    fields={"name": "X", "email": "x@x"})
+        assert manager.update_node_fields(meta.uuid, {}) is False
+
+    def test_delete_node_raises_value_error_on_backlinks(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta_a = manager.create_node(type_name="note", title="Note A")
+        meta_b = manager.create_node(type_name="note", title="Note B")
+        storage_b = compute_storage_path(vault_dir, meta_b.uuid)
+        meta_b.links = [{"target": meta_a.uuid}]
+        meta_b.save(NodeMetadata.metadata_path(storage_b))
+        with pytest.raises(ValueError, match=r"node\(s\) link to this node"):
+            manager.delete_node(meta_a.uuid)
+
+    def test_add_path_to_node(self, vault_dir):
+        import tomlkit
+
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Add")
+        with open(os.path.join(vault_dir, ".metadata", "vault.toml")) as f:
+            doc = tomlkit.load(f)
+        root_uuid = doc["path_root_uuid"]
+        path_uid = str(uuid.uuid4())
+        storage_dir = compute_storage_path(vault_dir, path_uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        path_meta = NodeMetadata(
+            uuid=path_uid,
+            type="path",
+            title="testpath",
+            fields={"name": "testpath"},
+            links=[{"target": root_uuid, "type": "path-parent", "title": ".."}],
+        )
+        path_meta.save(NodeMetadata.metadata_path(storage_dir))
+        assert manager.add_path_to_node(meta.uuid, "/testpath") is True
+        storage_dir2 = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir2))
+        assert path_uid in meta2.paths
+
+    def test_add_path_to_node_duplicate(self, vault_dir):
+        import tomlkit
+
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Dup")
+        with open(os.path.join(vault_dir, ".metadata", "vault.toml")) as f:
+            doc = tomlkit.load(f)
+        root_uuid = doc["path_root_uuid"]
+        path_uid = str(uuid.uuid4())
+        storage_dir = compute_storage_path(vault_dir, path_uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        path_meta = NodeMetadata(
+            uuid=path_uid,
+            type="path",
+            title="testpath2",
+            fields={"name": "testpath2"},
+            links=[{"target": root_uuid, "type": "path-parent", "title": ".."}],
+        )
+        path_meta.save(NodeMetadata.metadata_path(storage_dir))
+        manager.add_path_to_node(meta.uuid, "/testpath2")
+        assert manager.add_path_to_node(meta.uuid, "/testpath2") is False
+
+    def test_remove_path_from_node(self, vault_dir):
+        import tomlkit
+
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Remove")
+        with open(os.path.join(vault_dir, ".metadata", "vault.toml")) as f:
+            doc = tomlkit.load(f)
+        root_uuid = doc["path_root_uuid"]
+        path_uid = str(uuid.uuid4())
+        storage_dir = compute_storage_path(vault_dir, path_uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        path_meta = NodeMetadata(
+            uuid=path_uid,
+            type="path",
+            title="testpath3",
+            fields={"name": "testpath3"},
+            links=[{"target": root_uuid, "type": "path-parent", "title": ".."}],
+        )
+        path_meta.save(NodeMetadata.metadata_path(storage_dir))
+        manager.add_path_to_node(meta.uuid, "/testpath3")
+        assert manager.remove_path_from_node(meta.uuid, "/testpath3") is True
+        storage_dir2 = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir2))
+        assert path_uid not in meta2.paths
+
+    def test_remove_path_from_node_not_present(self, vault_dir):
+        import tomlkit
+
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Not Present")
+        with open(os.path.join(vault_dir, ".metadata", "vault.toml")) as f:
+            doc = tomlkit.load(f)
+        root_uuid = doc["path_root_uuid"]
+        path_uid = str(uuid.uuid4())
+        storage_dir = compute_storage_path(vault_dir, path_uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        path_meta = NodeMetadata(
+            uuid=path_uid,
+            type="path",
+            title="orphanpath",
+            fields={"name": "orphanpath"},
+            links=[{"target": root_uuid, "type": "path-parent", "title": ".."}],
+        )
+        path_meta.save(NodeMetadata.metadata_path(storage_dir))
+        assert manager.remove_path_from_node(meta.uuid, "/orphanpath") is False
