@@ -329,3 +329,46 @@ class TestNodeManager:
         manager = NodeManager(vault_dir)
         result = manager._find_backlinks("00000000-0000-0000-0000-000000000000")
         assert result == []
+
+    def test_delete_node_force_with_backlinks(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta_a = manager.create_node(type_name="note", title="Note A")
+        meta_b = manager.create_node(type_name="note", title="Note B")
+        storage_b = compute_storage_path(vault_dir, meta_b.uuid)
+        meta_b.links = [{"target": meta_a.uuid}]
+        meta_b.save(NodeMetadata.metadata_path(storage_b))
+        result = manager.delete_node(meta_a.uuid, force=True)
+        assert result is True
+        storage_dir_a = compute_storage_path(vault_dir, meta_a.uuid)
+        assert not os.path.exists(storage_dir_a)
+
+    def test_delete_nonexistent_node_no_force(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        result = manager.delete_node("00000000-0000-0000-0000-000000000000")
+        assert result is False
+
+    def test_show_node_with_path(self, vault_dir):
+        import tomlkit
+
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Node")
+        with open(os.path.join(vault_dir, ".metadata", "vault.toml")) as f:
+            doc = tomlkit.load(f)
+        root_uuid = doc["path_root_uuid"]
+        path_uid = str(uuid.uuid4())
+        storage_dir = compute_storage_path(vault_dir, path_uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        path_meta = NodeMetadata(
+            uuid=path_uid,
+            type="path",
+            title="mypath",
+            fields={"name": "mypath"},
+            links=[{"target": root_uuid, "type": "path-parent", "title": ".."}],
+        )
+        path_meta.save(NodeMetadata.metadata_path(storage_dir))
+        storage_dir2 = compute_storage_path(vault_dir, meta.uuid)
+        meta.paths = [path_uid]
+        meta.save(NodeMetadata.metadata_path(storage_dir2))
+        output = manager.show_node(meta.uuid)
+        assert output is not None
+        assert "/mypath" in output

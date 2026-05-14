@@ -29,7 +29,11 @@ class QueryEngine:
             matched = self._match(nodes, term)
 
             if result is None:
-                result = matched
+                if current_op == "NOT":
+                    exclude_ids = {id(n) for n in matched}
+                    result = [n for n in nodes if id(n) not in exclude_ids]
+                else:
+                    result = matched
             elif current_op == "AND":
                 result = [n for n in result if n in matched]
             elif current_op == "OR":

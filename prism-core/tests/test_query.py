@@ -172,3 +172,24 @@ class TestQueryEngine:
         ast = QueryParser().parse("")
         result = engine.execute(ast)
         assert len(result) == 3
+
+    def test_not_standalone_excludes(self, vault_dir):
+        engine = QueryEngine(vault_dir)
+        ast = QueryParser().parse("NOT tag:work")
+        result = engine.execute(ast)
+        assert len(result) == 2
+        uuids = {n.uuid for n in result}
+        assert "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" not in uuids
+
+    def test_and_not_nested(self, vault_dir):
+        engine = QueryEngine(vault_dir)
+        ast = QueryParser().parse("tag:personal AND NOT tag:nonexistent")
+        result = engine.execute(ast)
+        assert len(result) == 1
+        assert result[0].title == "John Doe"
+
+    def test_nonexistent_field_returns_empty(self, vault_dir):
+        engine = QueryEngine(vault_dir)
+        ast = QueryParser().parse("nonexistent:value")
+        result = engine.execute(ast)
+        assert result == []
