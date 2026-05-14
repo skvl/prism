@@ -1,3 +1,8 @@
+"""Type system package.
+
+Exports: FieldDef, TypeSchema, TypeLoader, FieldValidator, built-in TOML constants.
+"""
+
 from prism.types.schema import FieldDef, TypeSchema
 from prism.types.loader import TypeLoader
 from prism.types.validator import FieldValidator

@@ -1,3 +1,8 @@
+"""Vault registry management.
+
+Persistent registry of known vaults stored in ~/.config/prism/vaults.toml.
+"""
+
 import os
 from pathlib import Path
 from typing import Optional
@@ -9,7 +14,13 @@ REGISTRY_PATH = Path.home() / ".config" / "prism" / "vaults.toml"
 
 
 class VaultRegistry:
+    """Manages the persistent registry of known vaults.
+
+    Stores vault entries in ~/.config/prism/vaults.toml with add,
+    remove, list, and lookup operations.
+    """
     def __init__(self) -> None:
+        """Initialize the registry, ensuring the config directory exists."""
         self._ensure_config_dir()
         self._vaults: list[dict[str, str]] = []
         self._load()
@@ -38,6 +49,13 @@ class VaultRegistry:
             tomlkit.dump(doc, f)
 
     def add(self, vault_uuid: str, path: str, name: Optional[str] = None) -> None:
+        """Register a vault in the registry.
+
+        Args:
+            vault_uuid: UUID of the vault.
+            path: Filesystem path to the vault.
+            name: Optional human-readable name.
+        """
         self._load()
         for v in self._vaults:
             if v["path"] == path:
@@ -49,6 +67,14 @@ class VaultRegistry:
         self._save()
 
     def remove(self, path: str) -> bool:
+        """Remove a vault from the registry by path.
+
+        Args:
+            path: Filesystem path of the vault to remove.
+
+        Returns:
+            True if the vault was removed, False if not found.
+        """
         self._load()
         before = len(self._vaults)
         self._vaults = [v for v in self._vaults if v["path"] != path]
@@ -58,10 +84,23 @@ class VaultRegistry:
         return False
 
     def list(self) -> list[dict[str, str]]:
+        """List all registered vaults.
+
+        Returns:
+            List of vault dicts with uuid and path keys.
+        """
         self._load()
         return list(self._vaults)
 
     def get_by_uuid(self, vault_uuid: str) -> Optional[dict[str, str]]:
+        """Look up a vault by its UUID.
+
+        Args:
+            vault_uuid: UUID to search for.
+
+        Returns:
+            Vault dict or None if not found.
+        """
         self._load()
         for v in self._vaults:
             if v["uuid"] == vault_uuid:
@@ -69,6 +108,14 @@ class VaultRegistry:
         return None
 
     def get_by_path(self, path: str) -> Optional[dict[str, str]]:
+        """Look up a vault by its filesystem path.
+
+        Args:
+            path: Filesystem path to search for.
+
+        Returns:
+            Vault dict or None if not found.
+        """
         self._load()
         for v in self._vaults:
             if v["path"] == path:

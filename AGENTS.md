@@ -4,6 +4,14 @@
 
 Local-first, single-user PKM (Personal Knowledge Manager). Content-addressed blob store with typed node graph, TOML metadata, UUID-partitioned storage, and `[[uuid]]` link system.
 
+## Agent Constraints
+
+AI agents working in this project MUST follow these rules:
+
+- **No files outside project root**: All created, modified, or temporary files MUST reside within the project directory.
+- **Use `.tmp/` for temp files**: Any temporary files, scratch output, or intermediate artifacts MUST be placed in `.tmp/` at the project root.
+- **Respect scanning exclusions**: Directories listed in Agent Scanning Exclusions should be skipped during file searches.
+
 ## Directory Structure
 
 ```
@@ -36,15 +44,6 @@ Both packages must be installed together in editable mode:
 pip install -e prism-core/ -e prism-cli/
 ```
 
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `pytest` | Run tests (from `prism-core/`) |
-| `ruff check prism/` | Lint (from `prism-core/`) |
-| `mypy prism/` | Type check (from `prism-core/`) |
-| `prism --help` | CLI help |
-
 ## Code Conventions
 
 - **Python 3.11+**, strict mypy (`strict = true`, `disallow_untyped_defs = true`)
@@ -58,25 +57,12 @@ pip install -e prism-core/ -e prism-cli/
 - **Error handling**: CLI catches exceptions → `click.echo(..., err=True)` + `sys.exit(1)`
 - **Dependencies**: `tomlkit`, `click`, `click-default-group`
 
-## Module Map
+## Per-Package Guides
 
-| Module | Key Classes/Functions |
-|--------|----------------------|
-| `vault/vault.py` | `Vault.init()`, `.open()`, `.validate()`, `generate_uuid()`, `uuid_to_path()` |
-| `vault/registry.py` | `VaultRegistry.add()`, `.list()`, `.remove()`, `.get_by_uuid()` |
-| `vault/context.py` | `detect_vault(cwd, vault_flag)` |
-| `types/schema.py` | `TypeSchema`, `FieldDef` dataclasses, `VALID_TYPES`, `VALID_BODY_MODELS` |
-| `types/loader.py` | `TypeLoader.load_all()`, `.load(name)` |
-| `types/validator.py` | `FieldValidator.validate(fields)` |
-| `types/builtins.py` | `NOTE_TOML`, `CONTACT_TOML`, `BOOKMARK_TOML`, `FILE_TOML` constants |
-| `node/storage.py` | `StorageEngine.import/delete/read/verify`, `sha256_file()`, `compute_storage_path()` |
-| `node/metadata.py` | `NodeMetadata` dataclass, `.from_toml()`, `.to_toml()`, `.save()` |
-| `node/manager.py` | `NodeManager.create/edit/delete/show/list`, index management |
-| `graph/links.py` | `LinkExtractor.extract_links()`, `BacklinkIndex`, `GraphExporter.export_dot/json()` |
-| `query/parser.py` | `QueryParser.parse()`, `QueryAST` |
-| `query/engine.py` | `QueryEngine.execute(ast)` |
-| `tracking.py` | `ChangeTracker.status()`, `.mark_dirty()`, `.re_extract_links()` |
-| CLI `main.py` | `cli` group + 14 commands wired to library |
+Detailed documentation for each sub-package:
+
+- **[`prism-core/AGENTS.md`](prism-core/AGENTS.md)** — Module map (file-level descriptions), type system overview, import conventions, architecture link
+- **[`prism-cli/AGENTS.md`](prism-cli/AGENTS.md)** — Command reference table, Click wiring patterns, REPL architecture, tutor system notes
 
 ## OpenSpec
 

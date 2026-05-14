@@ -1,3 +1,9 @@
+"""Change detection and tracking.
+
+Detects modified nodes, new files, orphaned nodes,
+and coordinates re-extraction of links and blob metadata.
+"""
+
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -9,11 +15,22 @@ from prism.graph.links import LinkExtractor
 
 
 class ChangeTracker:
+    """Tracks changes to vault nodes: modified bodies, new files, orphaned nodes."""
     def __init__(self, vault_path: str) -> None:
+        """Initialize the change tracker.
+
+        Args:
+            vault_path: Root path of the vault.
+        """
         self.vault_path = vault_path
         self.manager = NodeManager(vault_path)
 
     def status(self) -> dict[str, list[dict[str, str]]]:
+        """Get the current vault status report.
+
+        Returns:
+            Dict with changed, new_files, and orphaned lists.
+        """
         changed_nodes: list[dict[str, str]] = []
         new_files: list[dict[str, str]] = []
         orphaned_nodes: list[dict[str, str]] = []
@@ -69,6 +86,11 @@ class ChangeTracker:
         }
 
     def mark_dirty(self, uid: str) -> None:
+        """Mark a node as dirty in its metadata.
+
+        Args:
+            uid: UUID of the node.
+        """
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         if not os.path.exists(meta_path):
@@ -79,6 +101,14 @@ class ChangeTracker:
         meta.save(meta_path)
 
     def re_extract_links(self, uid: str) -> bool:
+        """Re-extract [[uuid]] links from a node's body.
+
+        Args:
+            uid: UUID of the node.
+
+        Returns:
+            True if links were re-extracted, False if no body exists.
+        """
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         if not os.path.exists(meta_path):
@@ -100,6 +130,11 @@ class ChangeTracker:
         return True
 
     def update_blob_info(self, uid: str) -> None:
+        """Update a node's blob metadata (mtime, size, sha256) from disk.
+
+        Args:
+            uid: UUID of the node.
+        """
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         if not os.path.exists(meta_path):

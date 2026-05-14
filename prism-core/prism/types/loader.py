@@ -1,3 +1,8 @@
+"""Type schema loading from TOML files.
+
+Loads and parses .toml type definitions from a vault's types directory.
+"""
+
 from pathlib import Path
 from typing import Optional
 
@@ -7,10 +12,22 @@ from prism.types.schema import FieldDef, TypeSchema, VALID_BODY_MODELS, VALID_TY
 
 
 class TypeLoader:
+    """Loads and parses type schema definitions from TOML files."""
+
     def __init__(self, types_dir: str) -> None:
+        """Initialize the loader.
+
+        Args:
+            types_dir: Path to the directory containing .toml type files.
+        """
         self.types_dir = Path(types_dir)
 
     def load_all(self) -> dict[str, TypeSchema]:
+        """Load all type schemas from the types directory.
+
+        Returns:
+            Dictionary mapping type name to TypeSchema.
+        """
         schemas: dict[str, TypeSchema] = {}
         if not self.types_dir.exists():
             return schemas
@@ -21,6 +38,14 @@ class TypeLoader:
         return schemas
 
     def load(self, type_name: str) -> Optional[TypeSchema]:
+        """Load a single type schema by name.
+
+        Args:
+            type_name: Name of the type (filename without .toml).
+
+        Returns:
+            The TypeSchema or None if not found.
+        """
         toml_file = self.types_dir / f"{type_name}.toml"
         if not toml_file.exists():
             return None

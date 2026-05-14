@@ -1,3 +1,8 @@
+"""Interactive REPL for Prism.
+
+Wraps CLI commands in an interactive shell with command dispatch,
+UUID shorthand (`_`), tab completion, and history persistence.
+"""
 import os
 import readline
 import subprocess
@@ -33,7 +38,20 @@ UNSUPPORTED_IN_REPL = {"tutor"}
 
 
 class Repl:
+    """Interactive REPL session for Prism.
+
+    Wraps CLI commands with tab completion, history, alias resolution,
+    UUID shorthand (`_`), and degraded-mode operation without a vault.
+    """
+
     def __init__(self, vault: Optional[Vault] = None, input_stream=None, output_stream=None) -> None:
+        """Initialize the REPL session.
+
+        Args:
+            vault: Optional vault to connect to.
+            input_stream: Custom input stream (for testing).
+            output_stream: Custom output stream (for testing).
+        """
         self.vault = vault
         self.last_uuid: Optional[str] = None
         self._completion_matches: list[str] = []
@@ -78,6 +96,11 @@ class Repl:
         return resolved
 
     def run(self) -> None:
+        """Run the main REPL event loop.
+
+        Reads commands from input, dispatches them to handler methods,
+        and persists history on exit.
+        """
         inp = self._input if self._input is not None else sys.stdin
         out = self._output if self._output is not None else sys.stdout
         out.write("Prism REPL. Type 'help' for commands, 'exit' to quit.\n")

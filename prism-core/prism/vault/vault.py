@@ -1,3 +1,9 @@
+"""Vault lifecycle management.
+
+Provides Vault class for init, open, and validate operations,
+plus UUID generation and path conversion utilities.
+"""
+
 import os
 import shutil
 import uuid
@@ -10,10 +16,25 @@ from prism import VERSION
 
 
 def generate_uuid() -> uuid.UUID:
+    """Generate a new random UUID.
+
+    Returns:
+        A new random UUID.
+    """
     return uuid.uuid4()
 
 
 def uuid_to_path(uid: uuid.UUID) -> str:
+    """Convert a UUID to a partitioned storage path.
+
+    Uses the hex representation split into 4-4-4-remaining segments.
+
+    Args:
+        uid: The UUID to convert.
+
+    Returns:
+        The partitioned path string.
+    """
     hex_str = uid.hex
     return os.path.join(hex_str[0:4], hex_str[4:8], hex_str[8:12], hex_str[12:])
 
@@ -26,7 +47,21 @@ VAULT_TOML_FIELDS = {
 
 
 class Vault:
+    """Represents a Prism vault with lifecycle operations.
+
+    Provides class methods for initializing and opening vaults,
+    and an instance method for validating vault structure.
+    """
     def __init__(self, path: str, vault_uuid: str, schema_version: int, created_at: str, path_root_uuid: str = "") -> None:
+        """Initialize a Vault instance.
+
+        Args:
+            path: Filesystem path to the vault root.
+            vault_uuid: UUID identifying this vault.
+            schema_version: Schema version number.
+            created_at: ISO-8601 creation timestamp.
+            path_root_uuid: UUID of the root path node.
+        """
         self.path = path
         self.vault_uuid = vault_uuid
         self.schema_version = schema_version
@@ -35,6 +70,19 @@ class Vault:
 
     @classmethod
     def init(cls, path: str) -> "Vault":
+        """Initialize a new vault at the given path.
+
+        Creates .metadata and .storage directories and writes vault.toml.
+
+        Args:
+            path: Directory path for the new vault.
+
+        Returns:
+            A new Vault instance.
+
+        Raises:
+            FileExistsError: A vault already exists at this location.
+        """
         vault_path = Path(path).resolve()
         metadata_dir = vault_path / ".metadata"
         storage_dir = vault_path / ".storage"
@@ -85,6 +133,17 @@ class Vault:
 
     @classmethod
     def open(cls, path: str) -> "Vault":
+        """Open an existing vault at the given path.
+
+        Args:
+            path: Directory path containing the vault.
+
+        Returns:
+            A new Vault instance loaded from vault.toml.
+
+        Raises:
+            FileNotFoundError: No vault.toml found at the path.
+        """
         vault_path = Path(path).resolve()
         vault_toml_path = vault_path / ".metadata" / "vault.toml"
         if not vault_toml_path.exists():
@@ -102,6 +161,11 @@ class Vault:
         )
 
     def validate(self) -> list[str]:
+        """Validate the vault's directory structure and vault.toml consistency.
+
+        Returns:
+            List of issue descriptions. Empty list means valid.
+        """
         issues: list[str] = []
         vault_path = Path(self.path)
         metadata_dir = vault_path / ".metadata"

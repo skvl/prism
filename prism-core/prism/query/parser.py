@@ -1,3 +1,9 @@
+"""Query language parser.
+
+Tokenizes and parses query strings with tag:/type:/path: filters,
+AND/OR/NOT operators, quoted strings, and text terms.
+"""
+
 import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -13,11 +19,29 @@ TOKEN_RE = re.compile(
 
 @dataclass
 class QueryAST:
+    """Abstract syntax tree representing a parsed query.
+
+    Attributes:
+        terms: List of query terms (text, filter, or operator dicts).
+    """
     terms: list[dict[str, Any]] = field(default_factory=list)
 
 
 class QueryParser:
+    """Parses query strings into QueryAST objects.
+
+    Supports tag:/type:/path: filters, AND/OR/NOT operators,
+    double-quoted strings, and bare text terms.
+    """
     def parse(self, query_str: str) -> QueryAST:
+        """Parse a query string into an AST.
+
+        Args:
+            query_str: Raw query string.
+
+        Returns:
+            QueryAST representing the parsed query.
+        """
         ast = QueryAST()
         tokens = self._tokenize(query_str)
         i = 0

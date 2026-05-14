@@ -1,3 +1,9 @@
+"""Node CRUD operations.
+
+Provides NodeManager for creating, editing, deleting, and querying nodes,
+plus a resolve_uuid helper for partial UUID matching.
+"""
+
 import os
 import shutil
 from datetime import datetime, timezone
@@ -14,6 +20,21 @@ from prism.vault.vault import generate_uuid
 
 
 def resolve_uuid(vault_path: str, partial: str) -> str:
+    """Resolve a partial UUID to a full 36-character UUID.
+
+    Searches all metadata.toml files in .storage for a node whose
+    UUID starts with the given prefix.
+
+    Args:
+        vault_path: Root path of the vault.
+        partial: Full or partial UUID string.
+
+    Returns:
+        The full 36-character UUID string.
+
+    Raises:
+        ValueError: Zero or multiple matches found.
+    """
     if len(partial) >= 36:
         return partial
     nodes = _list_all_nodes(vault_path)
@@ -42,7 +63,18 @@ def _list_all_nodes(vault_path: str) -> list[NodeMetadata]:
 
 
 class NodeManager:
+    """Manages node CRUD operations within a vault.
+
+    Handles creating, editing, deleting, and querying nodes,
+    including tag management and path associations.
+    """
+
     def __init__(self, vault_path: str) -> None:
+        """Initialize the node manager.
+
+        Args:
+            vault_path: Root path of the vault.
+        """
         self.vault_path = vault_path
         self.storage = StorageEngine(vault_path)
         self.types_dir = os.path.join(vault_path, ".metadata", "types")
@@ -60,6 +92,21 @@ class NodeManager:
         blob_path: Optional[str] = None,
         tags: Optional[list[str]] = None,
     ) -> NodeMetadata:
+        """Create a new node of the given type.
+
+        Args:
+            type_name: Type identifier for the node.
+            title: Optional title for the node.
+            fields: Optional field values.
+            blob_path: Optional path to a file to import as blob.
+            tags: Optional list of tags.
+
+        Returns:
+            The newly created NodeMetadata.
+
+        Raises:
+            ValueError: If type is unknown, validation fails, or type is 'path'.
+        """
         if type_name == "path":
             raise ValueError("Path nodes cannot be created via `prism new`. Use `prism path create` instead.")
 
@@ -118,6 +165,14 @@ class NodeManager:
         return meta
 
     def get_body_info(self, uid: str) -> tuple[str, float] | None:
+        """Get the body file path and modification time for a node.
+
+        Args:
+            uid: UUID of the node (full or partial).
+
+        Returns:
+            Tuple of (body_path, mtime) or None if no body exists.
+        """
         uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
@@ -129,6 +184,14 @@ class NodeManager:
         return (body_path, os.stat(body_path).st_mtime)
 
     def commit_body_edit(self, uid: str, mtime: float, size: int, sha256: str) -> None:
+        """Commit an edited body, updating metadata and re-extracting links.
+
+        Args:
+            uid: UUID of the node (full or partial).
+            mtime: New modification time.
+            size: New file size.
+            sha256: New SHA-256 hash.
+        """
         from prism.graph.links import LinkExtractor
 
         uid = self._resolve_uuid(uid)
@@ -147,6 +210,17 @@ class NodeManager:
         meta.save(meta_path)
 
     def get_field_info(self, uid: str) -> tuple[TypeSchema, dict[str, Any]]:
+        """Get the type schema and current field values for a node.
+
+        Args:
+            uid: UUID of the node (full or partial).
+
+        Returns:
+            Tuple of (TypeSchema, field_values dict).
+
+        Raises:
+            ValueError: If the node's type is unknown.
+        """
         uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
@@ -156,6 +230,15 @@ class NodeManager:
         return (schema, dict(meta.fields))
 
     def update_node_fields(self, uid: str, changes: dict[str, Any]) -> bool:
+        """Update field values on a node.
+
+        Args:
+            uid: UUID of the node (full or partial).
+            changes: Dictionary of field name to new value.
+
+        Returns:
+            True if changes were applied, False if no changes provided.
+        """
         if not changes:
             return False
         uid = self._resolve_uuid(uid)
@@ -170,6 +253,18 @@ class NodeManager:
         return True
 
     def delete_node(self, uid: str, force: bool = False) -> bool:
+        """Delete a node and its storage directory.
+
+        Args:
+            uid: UUID of the node (full or partial).
+            force: If True, skip backlink check.
+
+        Returns:
+            True if deleted, False if not found.
+
+        Raises:
+            ValueError: If backlinks exist and force is False.
+        """
         uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         if not os.path.exists(storage_dir):
@@ -188,6 +283,14 @@ class NodeManager:
         return True
 
     def show_node(self, uid: str) -> Optional[str]:
+        """Get a formatted display string for a node.
+
+        Args:
+            uid: UUID of the node (full or partial).
+
+        Returns:
+            Formatted string or None if not found.
+        """
         uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
@@ -246,6 +349,11 @@ class NodeManager:
                 f.write(f"{u}\n")
 
     def rebuild_index(self) -> None:
+        """Rebuild the index.txt from all nodes found in .storage.
+
+        Walks the .storage directory tree, collects all node UUIDs,
+        sorts them, and writes them to index.txt.
+        """
         storage_dir = os.path.join(self.vault_path, ".storage")
         uids: list[str] = []
         if os.path.exists(storage_dir):
@@ -280,9 +388,23 @@ class NodeManager:
         return result
 
     def list_nodes(self) -> list[NodeMetadata]:
+        """List all nodes in the vault.
+
+        Returns:
+            List of NodeMetadata for all discovered nodes.
+        """
         return _list_all_nodes(self.vault_path)
 
     def add_path_to_node(self, uid: str, path_str: str) -> bool:
+        """Associate a node with a path.
+
+        Args:
+            uid: UUID of the node.
+            path_str: Path string to associate.
+
+        Returns:
+            True if path was added, False if already associated.
+        """
         uid = self._resolve_uuid(uid)
         resolver = PathResolver(self.vault_path)
         path_uuid = resolver.resolve(path_str)
@@ -298,6 +420,15 @@ class NodeManager:
         return True
 
     def remove_path_from_node(self, uid: str, path_str: str) -> bool:
+        """Remove a path association from a node.
+
+        Args:
+            uid: UUID of the node.
+            path_str: Path string to remove.
+
+        Returns:
+            True if path was removed, False if not associated.
+        """
         uid = self._resolve_uuid(uid)
         resolver = PathResolver(self.vault_path)
         path_uuid = resolver.resolve(path_str)
@@ -313,6 +444,18 @@ class NodeManager:
         return True
 
     def add_tag(self, uid: str, tag: str) -> bool:
+        """Add a tag to a node.
+
+        Args:
+            uid: UUID of the node.
+            tag: Tag string to add.
+
+        Returns:
+            True if tag was added, False if already present.
+
+        Raises:
+            ValueError: If tag format is invalid.
+        """
         uid = self._resolve_uuid(uid)
         if not TAG_PATTERN.match(tag):
             raise ValueError(f"Invalid tag: {tag!r}")
@@ -330,6 +473,15 @@ class NodeManager:
         return True
 
     def remove_tag(self, uid: str, tag: str) -> bool:
+        """Remove a tag from a node.
+
+        Args:
+            uid: UUID of the node.
+            tag: Tag string to remove.
+
+        Returns:
+            True if tag was removed, False if not present.
+        """
         uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
@@ -345,6 +497,11 @@ class NodeManager:
         return True
 
     def list_tags(self) -> dict[str, int]:
+        """List all unique tags across the vault with counts.
+
+        Returns:
+            Dictionary mapping tag name to node count.
+        """
         tag_counts: dict[str, int] = {}
         for node in self.list_nodes():
             for tag in node.tags:
@@ -352,6 +509,18 @@ class NodeManager:
         return dict(sorted(tag_counts.items()))
 
     def rename_tag(self, old_tag: str, new_tag: str) -> int:
+        """Rename a tag across all nodes in the vault.
+
+        Args:
+            old_tag: Current tag name.
+            new_tag: New tag name.
+
+        Returns:
+            Number of nodes affected.
+
+        Raises:
+            ValueError: If new tag format is invalid.
+        """
         if not TAG_PATTERN.match(new_tag):
             raise ValueError(f"Invalid tag: {new_tag!r}")
         if old_tag == new_tag:

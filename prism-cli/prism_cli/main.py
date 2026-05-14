@@ -1,3 +1,8 @@
+"""Click-based CLI entry point for Prism.
+
+Defines all CLI commands, groups (tag, path, vault), and the main
+entry point. Delegates business logic to `commands.py`.
+"""
 import json
 import os
 import subprocess
@@ -716,6 +721,7 @@ def repl(ctx: click.Context, vault: Optional[str]) -> None:
 
 
 def main() -> None:
+    """Entry point for the CLI. Delegates to the Click group."""
     cli()
 
 if __name__ == "__main__":

@@ -1,3 +1,9 @@
+"""Business logic for CLI commands.
+
+Implements all vault operations: init, create, edit, delete, query,
+link, import, tag management, path management, and graph export.
+Each function returns a CmdResult dataclass.
+"""
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -17,6 +23,14 @@ from prism.vault.registry import VaultRegistry
 
 @dataclass
 class CmdResult:
+    """Result of a command execution.
+
+    Attributes:
+        ok: Whether the command succeeded.
+        error: Error message if the command failed.
+        code: Machine-readable error code.
+        data: Response payload.
+    """
     ok: bool
     error: str = ""
     code: str = ""
@@ -24,6 +38,7 @@ class CmdResult:
 
 
 def write_builtin_types(vault: Vault) -> CmdResult:
+    """Write built-in type definitions to a vault's types directory."""
     from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML, PATH_TOML
 
     types_dir = os.path.join(vault.path, ".metadata", "types")
@@ -51,6 +66,15 @@ def write_builtin_types(vault: Vault) -> CmdResult:
 
 
 def find_by_hash(manager: NodeManager, file_hash: str) -> CmdResult:
+    """Find a node by its blob SHA-256 hash.
+
+    Args:
+        manager: The node manager for the vault.
+        file_hash: SHA-256 hash to search for.
+
+    Returns:
+        CmdResult with node data if found, or NOT_FOUND code.
+    """
     for node in manager.list_nodes():
         if node.blob_sha256 == file_hash:
             return CmdResult(ok=True, data={"uuid": node.uuid, "title": node.title})
@@ -58,6 +82,14 @@ def find_by_hash(manager: NodeManager, file_hash: str) -> CmdResult:
 
 
 def init_vault(path: str) -> CmdResult:
+    """Initialize a new vault at the given path.
+
+    Args:
+        path: Filesystem path for the new vault.
+
+    Returns:
+        CmdResult with vault details, or ALREADY_EXISTS if a vault exists.
+    """
     try:
         vault = Vault.init(path)
         write_builtin_types(vault)
@@ -71,6 +103,14 @@ def init_vault(path: str) -> CmdResult:
 
 
 def open_vault(path: str) -> CmdResult:
+    """Open an existing vault.
+
+    Args:
+        path: Path to the vault directory.
+
+    Returns:
+        CmdResult with vault object, or NOT_FOUND error.
+    """
     try:
         vault = Vault.open(path)
         return CmdResult(ok=True, data={"vault": vault, "path": vault.path})
@@ -79,6 +119,15 @@ def open_vault(path: str) -> CmdResult:
 
 
 def show_node(vault: Vault, uuid: str) -> CmdResult:
+    """Display a node's details.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+
+    Returns:
+        CmdResult with formatted output string.
+    """
     manager = NodeManager(vault.path)
     output = manager.show_node(uuid)
     if output is None:
@@ -87,6 +136,16 @@ def show_node(vault: Vault, uuid: str) -> CmdResult:
 
 
 def delete_node(vault: Vault, uuid: str, force: bool = False) -> CmdResult:
+    """Delete a node from the vault.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+        force: Skip confirmation for linked nodes.
+
+    Returns:
+        CmdResult with deleted UUID, or error code.
+    """
     manager = NodeManager(vault.path)
     try:
         if manager.delete_node(uuid, force=force):
@@ -97,6 +156,15 @@ def delete_node(vault: Vault, uuid: str, force: bool = False) -> CmdResult:
 
 
 def verify_node(vault: Vault, uuid: str) -> CmdResult:
+    """Verify a node's blob integrity by comparing SHA-256 hashes.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+
+    Returns:
+        CmdResult with verification result.
+    """
     manager = NodeManager(vault.path)
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
@@ -115,6 +183,16 @@ def verify_node(vault: Vault, uuid: str) -> CmdResult:
 
 
 def export_graph(vault: Vault, output_format: str = "dot", include_paths: bool = False) -> CmdResult:
+    """Export the node graph in DOT or JSON format.
+
+    Args:
+        vault: The vault to export from.
+        output_format: "dot" or "json".
+        include_paths: Whether to include path nodes.
+
+    Returns:
+        CmdResult with graph output string.
+    """
     manager = NodeManager(vault.path)
     nodes = manager.list_nodes()
     exporter = GraphExporter(vault.path)
@@ -128,6 +206,15 @@ def export_graph(vault: Vault, output_format: str = "dot", include_paths: bool =
 
 
 def list_backlinks(vault: Vault, uuid: str) -> CmdResult:
+    """List all nodes that link to the given UUID.
+
+    Args:
+        vault: The vault to search.
+        uuid: Full or partial UUID of the target node.
+
+    Returns:
+        CmdResult with backlinks list.
+    """
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
     except ValueError as e:
@@ -139,6 +226,15 @@ def list_backlinks(vault: Vault, uuid: str) -> CmdResult:
 
 
 def query_nodes(vault: Vault, query_str: str) -> CmdResult:
+    """Query nodes using the Prism query language.
+
+    Args:
+        vault: The vault to query.
+        query_str: Query string with tag:/type:/path: filters and AND/OR/NOT.
+
+    Returns:
+        CmdResult with matching NodeMetadata list.
+    """
     parser = QueryParser()
     try:
         ast = parser.parse(query_str)
@@ -150,12 +246,28 @@ def query_nodes(vault: Vault, query_str: str) -> CmdResult:
 
 
 def vault_status(vault: Vault) -> CmdResult:
+    """Get vault status report: changed, new, and orphaned nodes.
+
+    Args:
+        vault: The vault to inspect.
+
+    Returns:
+        CmdResult with status report dict.
+    """
     tracker = ChangeTracker(vault.path)
     report = tracker.status()
     return CmdResult(ok=True, data=report)
 
 
 def add_vault(path: str) -> CmdResult:
+    """Register an existing vault in the vault registry.
+
+    Args:
+        path: Path to the vault directory.
+
+    Returns:
+        CmdResult with vault UUID and path.
+    """
     try:
         v = Vault.open(path)
     except FileNotFoundError as e:
@@ -167,6 +279,11 @@ def add_vault(path: str) -> CmdResult:
 
 
 def list_vaults() -> CmdResult:
+    """List all registered vaults.
+
+    Returns:
+        CmdResult with vaults list.
+    """
     registry = VaultRegistry()
     vaults = registry.list()
     return CmdResult(ok=True, data={"vaults": vaults})
@@ -180,6 +297,19 @@ def create_node(
     tags: Optional[list[str]] = None,
     add_path: Optional[str] = None,
 ) -> CmdResult:
+    """Create a new typed node.
+
+    Args:
+        vault: The vault to create the node in.
+        type_name: The node type (e.g. "note", "contact").
+        title: Optional node title.
+        fields: Optional field values keyed by field name.
+        tags: Optional list of tags.
+        add_path: Optional path to associate with the node.
+
+    Returns:
+        CmdResult with node metadata.
+    """
     manager = NodeManager(vault.path)
     try:
         meta = manager.create_node(
@@ -218,6 +348,17 @@ def edit_node(
     add_path: Optional[str] = None,
     remove_path: Optional[str] = None,
 ) -> CmdResult:
+    """Edit a node's path associations.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+        add_path: Path to associate with the node.
+        remove_path: Path to disassociate from the node.
+
+    Returns:
+        CmdResult describing the action taken.
+    """
     manager = NodeManager(vault.path)
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
@@ -244,6 +385,15 @@ def edit_node(
 
 
 def edit_node_body(vault: Vault, uuid: str) -> CmdResult:
+    """Get body info for editing a node's body content.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+
+    Returns:
+        CmdResult with body path and original mtime.
+    """
     manager = NodeManager(vault.path)
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
@@ -268,6 +418,15 @@ def edit_node_body(vault: Vault, uuid: str) -> CmdResult:
 
 
 def edit_node_fields(vault: Vault, uuid: str) -> CmdResult:
+    """Get field schema and current values for editing a node's fields.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+
+    Returns:
+        CmdResult with schema and current values.
+    """
     manager = NodeManager(vault.path)
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
@@ -296,6 +455,18 @@ def commit_body_edit(
     new_size: int,
     new_sha256: str,
 ) -> CmdResult:
+    """Commit changes to a node's body after editing.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+        new_mtime: Modification time after editing.
+        new_size: File size after editing.
+        new_sha256: SHA-256 hash after editing.
+
+    Returns:
+        CmdResult confirming the edit.
+    """
     manager = NodeManager(vault.path)
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
@@ -306,6 +477,16 @@ def commit_body_edit(
 
 
 def update_node_fields(vault: Vault, uuid: str, changes: dict[str, str]) -> CmdResult:
+    """Update a node's field values.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+        changes: Dict of field name to new value.
+
+    Returns:
+        CmdResult confirming the update.
+    """
     manager = NodeManager(vault.path)
     try:
         full_uuid = resolve_uuid(vault.path, uuid)
@@ -317,6 +498,16 @@ def update_node_fields(vault: Vault, uuid: str, changes: dict[str, str]) -> CmdR
 
 
 def link_nodes(vault: Vault, source_uuid: str, target_uuid: str) -> CmdResult:
+    """Create a directed link from source node to target node.
+
+    Args:
+        vault: The vault containing both nodes.
+        source_uuid: UUID of the source node.
+        target_uuid: UUID of the target node.
+
+    Returns:
+        CmdResult with link details, or ALREADY_EXISTS error.
+    """
     try:
         full_source = resolve_uuid(vault.path, source_uuid)
         full_target = resolve_uuid(vault.path, target_uuid)
@@ -380,6 +571,17 @@ def import_file(
     type_name: Optional[str] = None,
     force: bool = False,
 ) -> CmdResult:
+    """Import a file into the vault.
+
+    Args:
+        vault: The vault to import into.
+        source_path: Path to the file on disk.
+        type_name: Optional node type (default: "file").
+        force: Force import even if file hash already exists.
+
+    Returns:
+        CmdResult with node UUID, or ALREADY_EXISTS code.
+    """
     source_path = os.path.abspath(source_path)
     if not os.path.exists(source_path):
         return CmdResult(ok=False, error=f"File not found: {source_path}", code="NOT_FOUND", data={})
@@ -411,6 +613,17 @@ def manage_tags(
     uuid: Optional[str] = None,
     tags: Optional[list[str]] = None,
 ) -> CmdResult:
+    """Manage tags on nodes: add, rm, list, or rename.
+
+    Args:
+        vault: The vault to operate on.
+        action: One of "add", "rm", "list", "rename".
+        uuid: Node UUID (required for add/rm).
+        tags: Tag names (required for add/rm/rename).
+
+    Returns:
+        CmdResult with action-specific results.
+    """
     manager = NodeManager(vault.path)
 
     if action == "add":
@@ -470,6 +683,16 @@ def manage_paths(
     action: str,
     path_str: str = "",
 ) -> CmdResult:
+    """Manage path hierarchy: create, rm, or tree.
+
+    Args:
+        vault: The vault to operate on.
+        action: One of "create", "rm", "tree".
+        path_str: The path string for the operation.
+
+    Returns:
+        CmdResult with action-specific results.
+    """
     resolver = PathResolver(vault.path)
 
     if action == "create":

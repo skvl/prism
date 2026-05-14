@@ -1,3 +1,8 @@
+"""Node metadata dataclass and persistence.
+
+Defines NodeMetadata with TOML serialization and validation patterns.
+"""
+
 import os
 import re
 from dataclasses import dataclass, field
@@ -15,6 +20,11 @@ SEGMENT_PATTERN = re.compile(r"\A[^\x00-\x1f\x7f/]+\Z")
 
 @dataclass
 class NodeMetadata:
+    """Dataclass representing a node's metadata with TOML persistence.
+
+    Stores UUID, type, title, tags, paths, fields, links, timestamps,
+    blob info, and sync state. Supports serialization to and from TOML.
+    """
     uuid: str
     type: str
     title: str = ""
@@ -37,6 +47,14 @@ class NodeMetadata:
 
     @classmethod
     def from_toml(cls, path: str) -> "NodeMetadata":
+        """Load NodeMetadata from a metadata.toml file.
+
+        Args:
+            path: Path to the metadata.toml file.
+
+        Returns:
+            A new NodeMetadata instance.
+        """
         with open(path) as f:
             doc = tomlkit.load(f)
         return cls(
@@ -57,6 +75,11 @@ class NodeMetadata:
         )
 
     def to_toml(self) -> str:
+        """Serialize this metadata to a TOML string.
+
+        Returns:
+            TOML-formatted string.
+        """
         doc = tomlkit.document()
         doc["uuid"] = self.uuid
         doc["type"] = self.type
@@ -97,9 +120,22 @@ class NodeMetadata:
         return tomlkit.dumps(doc)
 
     def save(self, path: str) -> None:
+        """Save metadata to a file as TOML.
+
+        Args:
+            path: Destination file path.
+        """
         with open(path, "w") as f:
             f.write(self.to_toml())
 
     @staticmethod
     def metadata_path(storage_dir: str) -> str:
+        """Get the path to metadata.toml within a storage directory.
+
+        Args:
+            storage_dir: Storage directory path.
+
+        Returns:
+            Path to metadata.toml.
+        """
         return os.path.join(storage_dir, "metadata.toml")

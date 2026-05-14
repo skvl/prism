@@ -1,3 +1,8 @@
+"""Tab completion providers for the Prism REPL.
+
+Provides completions for commands, UUIDs, type names, tags, and paths
+for use with readline in the interactive REPL session.
+"""
 import os
 from typing import Optional
 
@@ -16,6 +21,15 @@ __all__ = [
 
 
 def complete_command(text: str, aliases: dict[str, str]) -> list[str]:
+    """Complete a command name from the given prefix.
+
+    Args:
+        text: Current input text to match against.
+        aliases: Command alias mapping.
+
+    Returns:
+        Sorted list of matching command names.
+    """
     all_commands = sorted(set(
         list(aliases.keys())
         + list(aliases.values())
@@ -27,6 +41,15 @@ def complete_command(text: str, aliases: dict[str, str]) -> list[str]:
 
 
 def complete_uuid(vault: Optional[object], text: str) -> list[str]:
+    """Complete a UUID from the given prefix.
+
+    Args:
+        vault: The current vault object.
+        text: UUID prefix to match.
+
+    Returns:
+        List of matching UUIDs.
+    """
     if vault is None:
         return []
     manager = NodeManager(vault.path)
@@ -40,6 +63,15 @@ def complete_uuid(vault: Optional[object], text: str) -> list[str]:
 
 
 def complete_type_name(vault: Optional[object], text: str) -> list[str]:
+    """Complete a node type name from the given prefix.
+
+    Args:
+        vault: The current vault object.
+        text: Type name prefix to match.
+
+    Returns:
+        List of matching type names.
+    """
     if vault is None:
         return []
     types_dir = os.path.join(vault.path, ".metadata", "types")
@@ -52,6 +84,15 @@ def complete_type_name(vault: Optional[object], text: str) -> list[str]:
 
 
 def complete_tag(vault: Optional[object], text: str) -> list[str]:
+    """Complete a tag name from the given prefix.
+
+    Args:
+        vault: The current vault object.
+        text: Tag prefix to match.
+
+    Returns:
+        Sorted list of matching tag names.
+    """
     if vault is None:
         return []
     tags: set[str] = set()
@@ -67,6 +108,15 @@ def complete_tag(vault: Optional[object], text: str) -> list[str]:
 
 
 def complete_path(vault: Optional[object], text: str) -> list[str]:
+    """Complete a path segment from the given prefix.
+
+    Args:
+        vault: The current vault object.
+        text: Path prefix to match.
+
+    Returns:
+        List of matching path completions.
+    """
     if vault is None:
         return []
     path_prefix = text
@@ -88,6 +138,20 @@ def resolve_completions(
     vault: Optional[object],
     aliases: dict[str, str],
 ) -> list[str]:
+    """Resolve completions based on command context.
+
+    Dispatches to the appropriate completion function based on
+    the current command and argument position.
+
+    Args:
+        parts: Current input split into parts.
+        text: Current word being completed.
+        vault: The current vault object.
+        aliases: Command alias mapping.
+
+    Returns:
+        List of completion candidates.
+    """
     if not parts or (len(parts) == 1 and text):
         return complete_command(text, aliases)
 

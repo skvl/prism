@@ -1,3 +1,9 @@
+"""Path hierarchy resolution.
+
+Resolves, creates, and traverses path segments in the vault's
+path node tree.
+"""
+
 import os
 import tomlkit
 from datetime import datetime, timezone
@@ -10,6 +16,10 @@ from prism.vault.vault import generate_uuid
 
 
 class PathResolver:
+    """Resolves, creates, and traverses path segments in the vault's path node tree.
+
+    Paths are hierarchical (/foo/bar/baz) and resolved through linked path nodes.
+    """
     def __init__(self, vault_path: str) -> None:
         self.vault_path = vault_path
         self._root_uuid: Optional[str] = None
@@ -51,6 +61,17 @@ class PathResolver:
         return children
 
     def resolve(self, path_string: str) -> str:
+        """Resolve a path string to a node UUID.
+
+        Args:
+            path_string: Absolute path starting with /.
+
+        Returns:
+            UUID of the leaf path node.
+
+        Raises:
+            ValueError: If path is invalid or a segment doesn't exist.
+        """
         path_string = path_string.strip()
         if not path_string.startswith("/"):
             raise ValueError("Path must start with /")
@@ -77,6 +98,17 @@ class PathResolver:
         return current_uuid
 
     def resolve_or_create(self, path_string: str) -> str:
+        """Resolve a path, creating any missing segments (mkdir -p style).
+
+        Args:
+            path_string: Absolute path starting with /.
+
+        Returns:
+            UUID of the leaf path node.
+
+        Raises:
+            ValueError: If path is invalid or contains invalid characters.
+        """
         path_string = path_string.strip()
         if not path_string.startswith("/"):
             raise ValueError("Path must start with /")
@@ -124,6 +156,14 @@ class PathResolver:
         return current_uuid
 
     def collect_descendants(self, uuid: str) -> list[str]:
+        """Collect all descendant path UUIDs under the given path node.
+
+        Args:
+            uuid: UUID of the parent path node.
+
+        Returns:
+            List of descendant UUIDs (BFS traversal).
+        """
         nodes = self._all_nodes()
         descendants: list[str] = []
         queue = [uuid]
@@ -145,6 +185,14 @@ class PathResolver:
         return parent_uuid in descendants
 
     def complete(self, prefix_path: str) -> list[str]:
+        """Tab-complete partial paths.
+
+        Args:
+            prefix_path: Partial path to complete.
+
+        Returns:
+            Sorted list of matching full paths.
+        """
         prefix_path = prefix_path.strip()
         if not prefix_path.startswith("/"):
             return []
@@ -171,6 +219,14 @@ class PathResolver:
         return sorted(matches)
 
     def resolve_uuid_to_path(self, uuid: str) -> str:
+        """Resolve a node UUID back to its path string.
+
+        Args:
+            uuid: UUID of the path node.
+
+        Returns:
+            Full path string like /foo/bar.
+        """
         nodes = self._all_nodes()
         nodes_by_uuid = {n.uuid: n for n in nodes}
         segments: list[str] = []

@@ -1,13 +1,33 @@
+"""Field validation against type schemas.
+
+Validates field values match their expected types.
+"""
+
 from typing import Any
 
 from prism.types.schema import TypeSchema
 
 
 class FieldValidator:
+    """Validates field values against a type schema's field definitions."""
+
     def __init__(self, schema: TypeSchema) -> None:
+        """Initialize the validator.
+
+        Args:
+            schema: The TypeSchema to validate against.
+        """
         self.schema = schema
 
     def validate(self, field_values: dict[str, Any]) -> list[str]:
+        """Validate field values against the schema.
+
+        Args:
+            field_values: Dictionary of field name to value.
+
+        Returns:
+            List of error messages. Empty list means valid.
+        """
         errors: list[str] = []
 
         for field_def in self.schema.fields:

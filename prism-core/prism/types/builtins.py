@@ -1,3 +1,8 @@
+"""Built-in type definitions as TOML strings.
+
+Defines note, contact, bookmark, file, and path type schemas.
+"""
+
 NOTE_TOML = '''name = "note"
 icon = "📝"
 body_model = "file(markdown)"

@@ -1,3 +1,9 @@
+"""Query execution engine.
+
+Evaluates QueryAST against a vault's nodes,
+supporting tag/type/path filters and full-text search.
+"""
+
 import json
 import os
 import subprocess
@@ -10,10 +16,27 @@ from prism.query.parser import QueryAST
 
 
 class QueryEngine:
+    """Executes QueryAST against a vault's nodes.
+
+    Supports tag, type, path, and text search with AND/OR/NOT logic.
+    """
     def __init__(self, vault_path: str) -> None:
+        """Initialize the query engine.
+
+        Args:
+            vault_path: Root path of the vault.
+        """
         self.vault_path = vault_path
 
     def execute(self, ast: QueryAST) -> list[NodeMetadata]:
+        """Execute a query AST against the vault.
+
+        Args:
+            ast: The parsed query AST.
+
+        Returns:
+            List of matching NodeMetadata.
+        """
         nodes = self._all_nodes()
         if not ast.terms:
             return nodes

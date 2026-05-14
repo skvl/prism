@@ -1,3 +1,9 @@
+"""Interactive tutorial system for Prism.
+
+Provides 8 guided lessons covering vault init, nodes, types, links,
+queries, file import, tags, and change tracking. Each lesson has
+multiple steps with concept explanations, commands, and verification.
+"""
 import os
 import shutil
 import signal
@@ -13,6 +19,7 @@ from prism.vault.vault import Vault
 
 
 class StepResult(Enum):
+    """Result of executing a tutorial step."""
     SUCCESS = "success"
     WARNING_RETRY = "warning_retry"
     SKIP = "skip"
@@ -20,6 +27,15 @@ class StepResult(Enum):
 
 @dataclass
 class Step:
+    """A single step within a tutorial lesson.
+
+    Attributes:
+        number: Step number within the lesson.
+        concept: Explanation of the concept being taught.
+        command: The command to run.
+        verify: Callback to verify the step was completed correctly.
+        warning: Warning message shown on failure.
+    """
     number: int
     concept: str
     command: str
@@ -29,6 +45,15 @@ class Step:
 
 @dataclass
 class Lesson:
+    """A tutorial lesson containing multiple steps.
+
+    Attributes:
+        number: Lesson number.
+        title: Short lesson title.
+        concept: Overview of the lesson topic.
+        steps: Ordered list of steps in the lesson.
+        summary: Recap shown after completing all steps.
+    """
     number: int
     title: str
     concept: str
@@ -40,7 +65,18 @@ TOTAL_LESSONS = 8
 
 
 class Tutor:
+    """Interactive tutorial runner for Prism.
+
+    Creates a temporary sandbox vault and walks through 8 lessons
+    covering vault init, nodes, types, links, queries, file import,
+    tags, and change tracking.
+    """
     def __init__(self, lesson_number: int = 1) -> None:
+        """Initialize the tutor.
+
+        Args:
+            lesson_number: Starting lesson number (1-based).
+        """
         self.lesson_number = lesson_number
         self.temp_dir: str = ""
         self.vault: Optional[Vault] = None
@@ -160,6 +196,14 @@ class Tutor:
     # --- Execution ---
 
     def _execute_command(self, command_str: str) -> subprocess.CompletedProcess:
+        """Execute a shell command in the temp vault directory.
+
+        Args:
+            command_str: The command to execute.
+
+        Returns:
+            The completed process result.
+        """
         try:
             result = subprocess.run(
                 command_str,
@@ -177,15 +221,41 @@ class Tutor:
         return result
 
     def _build_prism_cmd(self, cmd: str) -> str:
+        """Build the full Python invocation for a prism command.
+
+        Args:
+            cmd: The prism command string (e.g. "prism init .").
+
+        Returns:
+            Full command string using sys.executable.
+        """
         inner = cmd.removeprefix("prism ")
         return f"{sys.executable} -m prism_cli.main {inner}"
 
     # --- Verification helpers ---
 
     def _verify_vault_init(self, vault: Vault) -> bool:
+        """Verify that a vault has been initialized.
+
+        Args:
+            vault: The vault to check.
+
+        Returns:
+            True if vault.toml exists.
+        """
         return os.path.exists(os.path.join(vault.path, ".metadata", "vault.toml"))
 
     def _verify_node_count(self, vault: Vault, expected_count: int, expected_type: str) -> bool:
+        """Verify a specific number of nodes of a given type exist.
+
+        Args:
+            vault: The vault to check.
+            expected_count: Expected number of nodes.
+            expected_type: Node type to count.
+
+        Returns:
+            True if the count matches.
+        """
         from prism.node.manager import NodeManager
         manager = NodeManager(vault.path)
         nodes = manager.list_nodes()
@@ -193,6 +263,16 @@ class Tutor:
         return len(matching) == expected_count
 
     def _verify_node_has_tag(self, vault: Vault, uuid: str, tag: str) -> bool:
+        """Verify a node has a specific tag.
+
+        Args:
+            vault: The vault to check.
+            uuid: Full UUID of the node.
+            tag: Tag to check for.
+
+        Returns:
+            True if the node has the tag.
+        """
         from prism.node.metadata import NodeMetadata
         from prism.node.storage import compute_storage_path
         storage_dir = compute_storage_path(vault.path, uuid)
@@ -203,6 +283,16 @@ class Tutor:
         return tag in meta.tags
 
     def _verify_link_exists(self, vault: Vault, source_uuid: str, target_uuid: str) -> bool:
+        """Verify a link exists between two nodes.
+
+        Args:
+            vault: The vault to check.
+            source_uuid: Source node UUID.
+            target_uuid: Target node UUID.
+
+        Returns:
+            True if the link exists.
+        """
         from prism.node.manager import resolve_uuid
         from prism.node.metadata import NodeMetadata
         from prism.node.storage import compute_storage_path
@@ -218,12 +308,32 @@ class Tutor:
         return any(link.get("target", "") == target_uuid for link in meta.links)
 
     def _verify_backlink(self, vault: Vault, target_uuid: str, expected_source_uuid: str) -> bool:
+        """Verify a backlink exists from source to target.
+
+        Args:
+            vault: The vault to check.
+            target_uuid: UUID of the backlink target.
+            expected_source_uuid: Expected source UUID.
+
+        Returns:
+            True if the backlink exists.
+        """
         from prism.graph.links import BacklinkIndex
         index = BacklinkIndex(vault.path)
         backlinks = index.get_backlinks(target_uuid)
         return any(bl["uuid"] == expected_source_uuid for bl in backlinks)
 
     def _verify_query_result(self, vault: Vault, query_str: str, expected_uuid: str) -> bool:
+        """Verify a query returns a specific UUID.
+
+        Args:
+            vault: The vault to query.
+            query_str: Query string to execute.
+            expected_uuid: Expected UUID in results.
+
+        Returns:
+            True if the expected UUID is in results.
+        """
         from prism.query.parser import QueryParser
         from prism.query.engine import QueryEngine
         parser = QueryParser()
@@ -234,12 +344,30 @@ class Tutor:
         return any(n.uuid == target_uuid_full or n.uuid == expected_uuid for n in results)
 
     def _verify_file_imported(self, vault: Vault, file_hash: str) -> bool:
+        """Verify a file with a given hash has been imported.
+
+        Args:
+            vault: The vault to check.
+            file_hash: SHA-256 hash to find.
+
+        Returns:
+            True if a node with the hash exists.
+        """
         from prism.node.manager import NodeManager
         manager = NodeManager(vault.path)
         nodes = manager.list_nodes()
         return any(n.blob_sha256 == file_hash for n in nodes)
 
     def _verify_blob_integrity(self, vault: Vault, uuid: str) -> bool:
+        """Verify a node's blob integrity.
+
+        Args:
+            vault: The vault to check.
+            uuid: Full UUID of the node.
+
+        Returns:
+            True if the blob hash matches.
+        """
         from prism.node.manager import NodeManager
         from prism.node.metadata import NodeMetadata
         from prism.node.storage import compute_storage_path
@@ -252,27 +380,64 @@ class Tutor:
         return manager.storage.verify_integrity(uuid, meta.blob_sha256)
 
     def _verify_change_detected(self, vault: Vault) -> bool:
+        """Verify that changes have been detected in the vault.
+
+        Args:
+            vault: The vault to check.
+
+        Returns:
+            True if changed nodes exist.
+        """
         from prism.tracking import ChangeTracker
         tracker = ChangeTracker(vault.path)
         report = tracker.status()
         return len(report.get("changed", [])) > 0
 
     def _verify_tag_count(self, vault: Vault, expected: int) -> bool:
+        """Verify a minimum number of unique tags exist.
+
+        Args:
+            vault: The vault to check.
+            expected: Minimum number of tags expected.
+
+        Returns:
+            True if the tag count meets or exceeds expected.
+        """
         from prism.node.manager import NodeManager
         manager = NodeManager(vault.path)
         tags_dict = manager.list_tags()
         return len(tags_dict) >= expected
 
     def _verify_tag_renamed(self, vault: Vault, old_tag: str, new_tag: str) -> bool:
+        """Verify a tag has been renamed across all nodes.
+
+        Args:
+            vault: The vault to check.
+            old_tag: Original tag name.
+            new_tag: Expected new tag name.
+
+        Returns:
+            True if old_tag is gone and new_tag exists.
+        """
         from prism.node.manager import NodeManager
         manager = NodeManager(vault.path)
         tags_dict = manager.list_tags()
         return old_tag not in tags_dict and new_tag in tags_dict
 
     def _verify_always_true(self, vault: Vault) -> bool:
+        """A verification that always passes (for display-only steps)."""
         return True
 
     def _get_node_uuid_by_title(self, vault: Vault, title: str) -> Optional[str]:
+        """Find a node UUID by its title.
+
+        Args:
+            vault: The vault to search.
+            title: Node title to find.
+
+        Returns:
+            The node UUID, or None if not found.
+        """
         from prism.node.manager import NodeManager
         manager = NodeManager(vault.path)
         nodes = manager.list_nodes()
@@ -282,10 +447,23 @@ class Tutor:
         return None
 
     def _sha256(self, path: str) -> str:
+        """Compute SHA-256 hash of a file.
+
+        Args:
+            path: Path to the file.
+
+        Returns:
+            Hex digest string.
+        """
         from prism.node.storage import sha256_file
         return sha256_file(path)
 
     def _init_blob_mtime(self, uid: str) -> None:
+        """Initialize blob mtime for a node if not set.
+
+        Args:
+            uid: Node UUID.
+        """
         if self.vault is None:
             return
         from prism.node.metadata import NodeMetadata
@@ -303,6 +481,12 @@ class Tutor:
             meta.save(meta_path)
 
     def _capture_uuid(self, title: str, key: str) -> None:
+        """Capture a UUID by node title and store it for later use.
+
+        Args:
+            title: Node title to look up.
+            key: Format key to store the UUID under.
+        """
         if self.vault is None:
             return
         uid = self._get_node_uuid_by_title(self.vault, title)
@@ -312,12 +496,25 @@ class Tutor:
             self._init_blob_mtime(uid)
 
     def _resolve_uuid(self, short_or_key: str) -> str:
+        """Resolve a short UUID or format key to a full UUID.
+
+        Args:
+            short_or_key: Short UUID or format key (e.g. "note1").
+
+        Returns:
+            The full UUID string.
+        """
         full = self._fmt.get("_full_" + short_or_key, "")
         return full or short_or_key
 
     # --- Lesson and step execution ---
 
     def _run_lesson(self, lesson: Lesson) -> None:
+        """Run a single tutorial lesson with all its steps.
+
+        Args:
+            lesson: The lesson to run.
+        """
         self._show_header(lesson.number, lesson.title, TOTAL_LESSONS)
         self._show_concept(lesson.concept)
 
@@ -347,6 +544,12 @@ class Tutor:
             self._show_concept(lesson.summary)
 
     def _write_to_note_body(self, title: str, content: str) -> None:
+        """Write content to a note's body file behind the scenes.
+
+        Args:
+            title: Title of the note to modify.
+            content: Content to write to the body file.
+        """
         if self.vault is None:
             return
         from prism.node.storage import compute_storage_path
@@ -361,6 +564,14 @@ class Tutor:
             f.write(content)
 
     def _run_step(self, step: Step) -> StepResult:
+        """Run a single tutorial step: show concept, wait for input, verify.
+
+        Args:
+            step: The step to execute.
+
+        Returns:
+            StepResult indicating success, warning, or skip.
+        """
         self._show_concept(step.concept)
         expected_cmd = step.command.format(**self._fmt)
         if expected_cmd.startswith("prism "):
@@ -429,6 +640,11 @@ class Tutor:
     # --- Lesson plan ---
 
     def _build_lesson_plan(self) -> list[Lesson]:
+        """Build the complete lesson plan with all 8 lessons.
+
+        Returns:
+            Ordered list of Lesson objects.
+        """
         l1 = Lesson(
             number=1,
             title="What's a vault?",
@@ -727,6 +943,11 @@ class Tutor:
     # --- Main entry ---
 
     def run(self) -> None:
+        """Run the tutorial from the configured starting lesson.
+
+        Creates a temp vault, walks through lessons, and cleans up
+        unless the user opts to keep the practice vault.
+        """
         try:
             self._create_temp_vault()
             lessons = self._build_lesson_plan()

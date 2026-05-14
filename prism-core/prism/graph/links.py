@@ -1,3 +1,9 @@
+"""Link extraction, backlink indexing, and graph export.
+
+Extracts [[uuid]] links from node bodies, builds reverse indexes,
+and exports graphs in DOT or JSON format.
+"""
+
 import json
 import os
 import re
@@ -16,8 +22,20 @@ CROSS_VAULT_RE = re.compile(
 
 
 class LinkExtractor:
+    """Extracts [[uuid]] links from node body text.
+
+    Supports both vault-internal links and cross-vault references.
+    """
     @staticmethod
     def extract_links(body: str) -> list[dict[str, str]]:
+        """Extract [[uuid]] links from a body string.
+
+        Args:
+            body: Text content to scan for links.
+
+        Returns:
+            List of link dicts with target, type, and title keys.
+        """
         links: list[dict[str, str]] = []
         seen: set[str] = set()
 
@@ -39,16 +57,37 @@ class LinkExtractor:
 
     @staticmethod
     def extract_from_file(path: str) -> list[dict[str, str]]:
+        """Extract [[uuid]] links from a file.
+
+        Args:
+            path: Path to the file to scan.
+
+        Returns:
+            List of link dicts.
+        """
         with open(path) as f:
             body = f.read()
         return LinkExtractor.extract_links(body)
 
 
 class BacklinkIndex:
+    """Builds and queries a reverse index of links targeting each node."""
     def __init__(self, vault_path: str) -> None:
+        """Initialize the backlink index.
+
+        Args:
+            vault_path: Root path of the vault.
+        """
         self.vault_path = vault_path
 
     def build(self) -> dict[str, list[dict[str, str]]]:
+        """Build the full backlink index.
+
+        Walks all metadata.toml files and indexes links by target.
+
+        Returns:
+            Dict mapping target UUID to list of source node info.
+        """
         index: dict[str, list[dict[str, str]]] = {}
         storage_dir = os.path.join(self.vault_path, ".storage")
         if not os.path.exists(storage_dir):
@@ -74,15 +113,38 @@ class BacklinkIndex:
         return index
 
     def get_backlinks(self, uid: str) -> list[dict[str, str]]:
+        """Get all nodes that link to the given UUID.
+
+        Args:
+            uid: Target UUID to find backlinks for.
+
+        Returns:
+            List of source node info dicts.
+        """
         index = self.build()
         return index.get(uid, [])
 
 
 class GraphExporter:
+    """Exports the node graph in DOT or JSON format."""
     def __init__(self, vault_path: str) -> None:
+        """Initialize the graph exporter.
+
+        Args:
+            vault_path: Root path of the vault.
+        """
         self.vault_path = vault_path
 
     def export_dot(self, nodes: list[NodeMetadata], include_paths: bool = False) -> str:
+        """Export the graph as DOT format.
+
+        Args:
+            nodes: List of all nodes to include.
+            include_paths: Whether to include path nodes.
+
+        Returns:
+            DOT graph string.
+        """
         filtered = self._filter_nodes(nodes, include_paths)
         lines = ['digraph Prism {', '  rankdir=LR;', '  node [shape=box, style=rounded];']
         for node in filtered:
@@ -95,6 +157,15 @@ class GraphExporter:
         return "\n".join(lines)
 
     def export_json(self, nodes: list[NodeMetadata], include_paths: bool = False) -> str:
+        """Export the graph as JSON format.
+
+        Args:
+            nodes: List of all nodes to include.
+            include_paths: Whether to include path nodes.
+
+        Returns:
+            JSON string with nodes and edges arrays.
+        """
         filtered = self._filter_nodes(nodes, include_paths)
         export_nodes: list[dict] = []
         for node in filtered:
@@ -123,6 +194,15 @@ class GraphExporter:
 
     @staticmethod
     def resolve_cross_vault_link(vault_uuid: str, target_uuid: str) -> Optional[dict[str, str]]:
+        """Resolve a cross-vault link to another vault.
+
+        Args:
+            vault_uuid: UUID of the source vault.
+            target_uuid: UUID of the target node.
+
+        Returns:
+            Dict with uuid, title, type or None if not found.
+        """
         registry = VaultRegistry()
         vault_info = registry.get_by_uuid(vault_uuid)
         if vault_info is None:
