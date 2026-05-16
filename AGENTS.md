@@ -11,6 +11,11 @@ AI agents working in this project MUST follow these rules:
 - **No files outside project root**: All created, modified, or temporary files MUST reside within the project directory.
 - **Use `.tmp/` for temp files**: Any temporary files, scratch output, or intermediate artifacts MUST be placed in `.tmp/` at the project root.
 - **Respect scanning exclusions**: Directories listed in Agent Scanning Exclusions should be skipped during file searches.
+- **Virtual environment**: Use `.venv/` at project root. Create it with
+  `python3 -m venv .venv` if missing. All Python commands (pip, python,
+  pytest, etc.) run via the `.venv`'s interpreter. If `python3-venv`
+  system package is missing, or symlink/path issues arise, flag to the
+  user and ask how to proceed.
 
 ## Directory Structure
 
@@ -56,6 +61,10 @@ pip install -e prism-core/ -e prism-cli/
 - **Testing**: pytest, class-based groups, tempfile fixtures, no mocking
 - **Error handling**: CLI catches exceptions → `click.echo(..., err=True)` + `sys.exit(1)`
 - **Dependencies**: `tomlkit`, `click`, `click-default-group`
+- **New runtime dependencies**: Before adding a new runtime dependency,
+  evaluate whether stdlib suffices, explain the need to the user, and let
+  them decide. Dev/optional dependencies (testing, linting, tooling) don't
+  require approval.
 
 ## Per-Package Guides
 
