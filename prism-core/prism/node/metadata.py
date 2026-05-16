@@ -23,6 +23,7 @@ class NodeMetadata:
     Stores UUID, type, title, tags, paths, fields, links, timestamps,
     blob info, and sync state. Supports serialization to and from TOML.
     """
+
     uuid: str
     type: str
     title: str = ""

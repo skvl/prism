@@ -8,7 +8,6 @@ from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.vault.vault import Vault
-
 from prism_cli.repl import Repl
 
 
@@ -18,6 +17,7 @@ def vault_dir():
     Vault.init(d)
     types_dir = os.path.join(d, ".metadata", "types")
     from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
+
     for fname, content in [
         ("note.toml", NOTE_TOML),
         ("contact.toml", CONTACT_TOML),
@@ -54,6 +54,7 @@ def run_repl_no_vault(commands):
 
 # ── Basic Entry ─────────────────────────────────────────────────────────
 
+
 class TestReplBasic:
     def test_run_exit(self, vault):
         output = run_repl(vault, ["exit"])
@@ -88,6 +89,7 @@ class TestReplBasic:
 
 # ── Degraded Mode ───────────────────────────────────────────────────────
 
+
 class TestReplDegraded:
     def test_vault_rejected_in_degraded(self):
         output = run_repl_no_vault(["new", "note", "Title", "exit"])
@@ -118,6 +120,7 @@ class TestReplDegraded:
 
 # ── New ─────────────────────────────────────────────────────────────────
 
+
 class TestReplNew:
     def test_new_note(self, vault):
         output = run_repl(vault, ["new note 'My Note'", "exit"])
@@ -145,11 +148,12 @@ class TestReplNew:
         assert "does not exist" in output
 
     def test_new_with_field_extra(self, vault):
-        output = run_repl(vault, ['new contact John --name=John --email=j@test.com', "exit"])
+        output = run_repl(vault, ["new contact John --name=John --email=j@test.com", "exit"])
         assert "Created contact node:" in output
 
 
 # ── Show ────────────────────────────────────────────────────────────────
+
 
 class TestReplShow:
     def test_show_node(self, vault):
@@ -169,9 +173,11 @@ class TestReplShow:
 
 # ── Edit ────────────────────────────────────────────────────────────────
 
+
 class TestReplEdit:
     def test_edit_add_path(self, vault, vault_dir):
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault_dir)
         resolver.resolve_or_create("/test")
         manager = NodeManager(vault.path)
@@ -181,6 +187,7 @@ class TestReplEdit:
 
     def test_edit_remove_path(self, vault, vault_dir):
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault_dir)
         resolver.resolve_or_create("/test")
         manager = NodeManager(vault.path)
@@ -196,7 +203,8 @@ class TestReplEdit:
     def test_edit_field_node(self, vault):
         manager = NodeManager(vault.path)
         meta = manager.create_node(
-            type_name="contact", title="Contact Edit",
+            type_name="contact",
+            title="Contact Edit",
             fields={"name": "Old Name", "email": "old@test.com"},
         )
         output = run_repl(vault, [f"edit {meta.uuid[:12]}", "", "", "exit"])
@@ -204,6 +212,7 @@ class TestReplEdit:
 
 
 # ── Rm ──────────────────────────────────────────────────────────────────
+
 
 class TestReplRm:
     def test_rm_node(self, vault):
@@ -222,6 +231,7 @@ class TestReplRm:
 
 
 # ── Link ────────────────────────────────────────────────────────────────
+
 
 class TestReplLink:
     def test_link_success(self, vault):
@@ -255,6 +265,7 @@ class TestReplLink:
 
 # ── Backlinks ───────────────────────────────────────────────────────────
 
+
 class TestReplBacklinks:
     def test_backlinks_with_results(self, vault):
         manager = NodeManager(vault.path)
@@ -280,6 +291,7 @@ class TestReplBacklinks:
 
 # ── Graph ───────────────────────────────────────────────────────────────
 
+
 class TestReplGraph:
     def test_graph_dot(self, vault):
         manager = NodeManager(vault.path)
@@ -292,6 +304,7 @@ class TestReplGraph:
         manager.create_node(type_name="note", title="Graph JSON")
         output = run_repl(vault, ["graph json", "exit"])
         import json
+
         start = output.index("{")
         end = output.rindex("}") + 1
         json_str = output[start:end] if "{" in output and "}" in output else "{}"
@@ -304,6 +317,7 @@ class TestReplGraph:
 
 
 # ── Query ───────────────────────────────────────────────────────────────
+
 
 class TestReplQuery:
     def test_query_finds_node(self, vault):
@@ -322,6 +336,7 @@ class TestReplQuery:
 
 
 # ── Status ──────────────────────────────────────────────────────────────
+
 
 class TestReplStatus:
     def test_status_clean(self, vault):
@@ -348,6 +363,7 @@ class TestReplStatus:
 
 # ── Add-File ────────────────────────────────────────────────────────────
 
+
 class TestReplAddFile:
     def test_add_file_success(self, vault, vault_dir):
         file_path = os.path.join(vault_dir, "import.txt")
@@ -366,6 +382,7 @@ class TestReplAddFile:
 
 
 # ── Verify ──────────────────────────────────────────────────────────────
+
 
 class TestReplVerify:
     def test_verify_ok(self, vault, vault_dir):
@@ -387,6 +404,7 @@ class TestReplVerify:
 
 
 # ── Tag Commands ────────────────────────────────────────────────────────
+
 
 class TestReplTag:
     def test_tag_add(self, vault):
@@ -433,6 +451,7 @@ class TestReplTag:
 
 # ── Path Commands ───────────────────────────────────────────────────────
 
+
 class TestReplPath:
     def test_path_create(self, vault):
         output = run_repl(vault, ["path create /foo/bar", "exit"])
@@ -454,6 +473,7 @@ class TestReplPath:
 
 
 # ── Alias Resolution ────────────────────────────────────────────────────
+
 
 class TestReplAliases:
     def test_n_alias_new(self, vault):
@@ -494,8 +514,10 @@ class TestReplAliases:
         meta = manager.create_node(type_name="note", title="Edit Ali")
         output = run_repl(vault, [f"e {meta.uuid[:12]}", "exit"])
         assert (
-            "Body updated" in output or "No changes detected" in output
-            or "not found" in output or "Usage" in output
+            "Body updated" in output
+            or "No changes detected" in output
+            or "not found" in output
+            or "Usage" in output
         )
 
     def test_g_alias_graph(self, vault):
@@ -513,6 +535,7 @@ class TestReplAliases:
 
 # ── Underscore Reference ────────────────────────────────────────────────
 
+
 class TestReplUnderscore:
     def test_underscore_references_last_uuid(self, vault):
         output = run_repl(vault, ["new note First", "show _", "exit"])
@@ -524,6 +547,7 @@ class TestReplUnderscore:
 
 
 # ── Help ────────────────────────────────────────────────────────────────
+
 
 class TestReplHelp:
     def test_help_shows_commands(self, vault):
@@ -541,6 +565,7 @@ class TestReplHelp:
 
 # ── Tutor ───────────────────────────────────────────────────────────────
 
+
 class TestReplTutor:
     def test_tutor_unsupported(self, vault):
         output = run_repl(vault, ["tutor", "exit"])
@@ -548,6 +573,7 @@ class TestReplTutor:
 
 
 # ── Unknown Command ─────────────────────────────────────────────────────
+
 
 class TestReplUnknown:
     def test_unknown_command(self, vault):

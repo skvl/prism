@@ -17,6 +17,7 @@ class FieldDef:
         required: Whether the field must have a value.
         default: Default value if not provided.
     """
+
     name: str
     type: str
     required: bool = False
@@ -33,6 +34,7 @@ class TypeSchema:
         fields: List of field definitions.
         body_model: One of null, file(markdown), file(binary).
     """
+
     name: str
     icon: str = ""
     fields: list[FieldDef] = field(default_factory=list)

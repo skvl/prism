@@ -3,7 +3,7 @@
 Defines note, contact, bookmark, file, and path type schemas.
 """
 
-NOTE_TOML = '''name = "note"
+NOTE_TOML = """name = "note"
 icon = "📝"
 body_model = "file(markdown)"
 
@@ -16,9 +16,9 @@ required = false
 name = "tags"
 type = "array"
 required = false
-'''
+"""
 
-CONTACT_TOML = '''name = "contact"
+CONTACT_TOML = """name = "contact"
 icon = "👤"
 body_model = "null"
 
@@ -41,9 +41,9 @@ required = false
 name = "org"
 type = "string"
 required = false
-'''
+"""
 
-BOOKMARK_TOML = '''name = "bookmark"
+BOOKMARK_TOML = """name = "bookmark"
 icon = "🔖"
 body_model = "null"
 
@@ -61,9 +61,9 @@ required = false
 name = "tags"
 type = "array"
 required = false
-'''
+"""
 
-FILE_TOML = '''name = "file"
+FILE_TOML = """name = "file"
 icon = "📄"
 body_model = "file(binary)"
 
@@ -71,9 +71,9 @@ body_model = "file(binary)"
 name = "tags"
 type = "array"
 required = false
-'''
+"""
 
-PATH_TOML = '''name = "path"
+PATH_TOML = """name = "path"
 icon = "📁"
 body_model = "null"
 
@@ -81,4 +81,4 @@ body_model = "null"
 name = "name"
 type = "string"
 required = true
-'''
+"""

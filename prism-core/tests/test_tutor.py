@@ -4,13 +4,12 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
-from prism_cli import commands
-from prism_cli.tutor import Lesson, Step, StepResult, Tutor
-
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path, sha256_file
 from prism.vault.vault import Vault
+from prism_cli import commands
+from prism_cli.tutor import Lesson, Step, StepResult, Tutor
 
 
 class TestDataModel:
@@ -23,8 +22,13 @@ class TestDataModel:
         assert step.warning == ""
 
     def test_step_with_warning(self):
-        step = Step(number=2, concept="test", command="prism status",
-                    verify=lambda v: True, warning="Pay attention")
+        step = Step(
+            number=2,
+            concept="test",
+            command="prism status",
+            verify=lambda v: True,
+            warning="Pay attention",
+        )
         assert step.warning == "Pay attention"
 
     def test_lesson_creation(self):
@@ -33,8 +37,11 @@ class TestDataModel:
             Step(number=2, concept="s2", command="c2", verify=lambda v: True),
         ]
         lesson = Lesson(
-            number=1, title="Test Lesson", concept="A test",
-            steps=steps, summary="Done",
+            number=1,
+            title="Test Lesson",
+            concept="A test",
+            steps=steps,
+            summary="Done",
         )
         assert lesson.number == 1
         assert lesson.title == "Test Lesson"

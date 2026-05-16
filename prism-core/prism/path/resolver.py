@@ -20,6 +20,7 @@ class PathResolver:
 
     Paths are hierarchical (/foo/bar/baz) and resolved through linked path nodes.
     """
+
     def __init__(self, vault_path: str) -> None:
         self.vault_path = vault_path
         self._root_uuid: Optional[str] = None
@@ -93,7 +94,7 @@ class PathResolver:
                     found = True
                     break
             if not found:
-                segment_path = '/'.join(segments[:segments.index(segment) + 1])
+                segment_path = "/".join(segments[: segments.index(segment) + 1])
                 raise ValueError(f"Path segment not found: /{segment_path}")
 
         return current_uuid

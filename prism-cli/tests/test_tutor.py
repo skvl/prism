@@ -7,7 +7,6 @@ from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path, sha256_file
 from prism.vault.vault import Vault
-
 from prism_cli.tutor import Tutor
 
 
@@ -17,6 +16,7 @@ def vault_dir():
     Vault.init(d)
     types_dir = os.path.join(d, ".metadata", "types")
     from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
+
     for fname, content in [
         ("note.toml", NOTE_TOML),
         ("contact.toml", CONTACT_TOML),
@@ -44,6 +44,7 @@ def tutor(vault):
 
 # ── Verify Vault Init ───────────────────────────────────────────────────
 
+
 class TestVerifyVaultInit:
     def test_initialized(self, vault):
         tutor = Tutor()
@@ -62,6 +63,7 @@ class TestVerifyVaultInit:
 
 
 # ── Verify Node Count ───────────────────────────────────────────────────
+
 
 class TestVerifyNodeCount:
     def test_matching_count(self, vault):
@@ -82,6 +84,7 @@ class TestVerifyNodeCount:
 
 # ── Verify Node Has Tag ────────────────────────────────────────────────
 
+
 class TestVerifyNodeHasTag:
     def test_tag_present(self, vault):
         manager = NodeManager(vault.path)
@@ -99,6 +102,7 @@ class TestVerifyNodeHasTag:
 
 
 # ── Verify Link Exists ─────────────────────────────────────────────────
+
 
 class TestVerifyLinkExists:
     def test_link_exists(self, vault):
@@ -124,6 +128,7 @@ class TestVerifyLinkExists:
 
 # ── Verify Backlink ────────────────────────────────────────────────────
 
+
 class TestVerifyBacklink:
     def test_backlink_found(self, vault):
         manager = NodeManager(vault.path)
@@ -140,6 +145,7 @@ class TestVerifyBacklink:
 
 # ── Verify Query Result ────────────────────────────────────────────────
 
+
 class TestVerifyQueryResult:
     def test_query_finds_node(self, vault):
         manager = NodeManager(vault.path)
@@ -151,6 +157,7 @@ class TestVerifyQueryResult:
 
 
 # ── Verify File Imported ───────────────────────────────────────────────
+
 
 class TestVerifyFileImported:
     def test_file_imported(self, vault, vault_dir):
@@ -170,6 +177,7 @@ class TestVerifyFileImported:
 
 
 # ── Verify Blob Integrity ──────────────────────────────────────────────
+
 
 class TestVerifyBlobIntegrity:
     def test_valid_blob(self, vault, vault_dir):
@@ -197,6 +205,7 @@ class TestVerifyBlobIntegrity:
 
 # ── Verify Change Detected ─────────────────────────────────────────────
 
+
 class TestVerifyChangeDetected:
     def test_change_detected(self, vault):
         manager = NodeManager(vault.path)
@@ -220,6 +229,7 @@ class TestVerifyChangeDetected:
 
 # ── Verify Tag Count ───────────────────────────────────────────────────
 
+
 class TestVerifyTagCount:
     def test_meets_threshold(self, vault):
         manager = NodeManager(vault.path)
@@ -237,6 +247,7 @@ class TestVerifyTagCount:
 
 
 # ── Verify Tag Renamed ─────────────────────────────────────────────────
+
 
 class TestVerifyTagRenamed:
     def test_tag_renamed(self, vault):
@@ -257,6 +268,7 @@ class TestVerifyTagRenamed:
 
 # ── Verify Always True ─────────────────────────────────────────────────
 
+
 class TestVerifyAlwaysTrue:
     def test_always_true(self, vault):
         tutor = Tutor()
@@ -265,6 +277,7 @@ class TestVerifyAlwaysTrue:
 
 
 # ── Capture UUID ───────────────────────────────────────────────────────
+
 
 class TestCaptureUUID:
     def test_captures_short_and_full(self, vault):
@@ -278,6 +291,7 @@ class TestCaptureUUID:
 
 
 # ── Resolve UUID ───────────────────────────────────────────────────────
+
 
 class TestResolveUUID:
     def test_resolves_by_key(self, vault):
@@ -297,6 +311,7 @@ class TestResolveUUID:
 
 
 # ── SHA256 ─────────────────────────────────────────────────────────────
+
 
 class TestSha256:
     def test_computes_hash(self, vault_dir):

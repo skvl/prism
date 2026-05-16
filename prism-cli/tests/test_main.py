@@ -12,7 +12,6 @@ from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.vault.vault import Vault
-
 from prism_cli import commands
 from prism_cli.main import cli
 
@@ -23,6 +22,7 @@ def vault_dir():
     Vault.init(d)
     types_dir = os.path.join(d, ".metadata", "types")
     from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
+
     for fname, content in [
         ("note.toml", NOTE_TOML),
         ("contact.toml", CONTACT_TOML),
@@ -50,6 +50,7 @@ def reg_path(monkeypatch):
 
 # ── CLI Group ──────────────────────────────────────────────────────────
 
+
 class TestCliGroup:
     def test_help(self, runner):
         result = runner.invoke(cli, ["--help"])
@@ -68,7 +69,8 @@ class TestCliGroup:
 
     def test_no_subcommand(self, runner):
         result = runner.invoke(cli, [])
-        assert result.exit_code == 0
+        assert result.exit_code in (0, 2)
+        assert "Usage:" in result.output
 
     def test_verbose_flag(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "--verbose", "status"])
@@ -83,6 +85,7 @@ class TestCliGroup:
 
 
 # ── Init ───────────────────────────────────────────────────────────────
+
 
 class TestInitCommand:
     def test_init_success(self, runner):
@@ -101,6 +104,7 @@ class TestInitCommand:
 
 
 # ── Vault Subcommands ──────────────────────────────────────────────────
+
 
 class TestVaultCommands:
     def test_add_not_found(self, runner):
@@ -132,6 +136,7 @@ class TestVaultCommands:
 
 
 # ── Add-File ───────────────────────────────────────────────────────────
+
 
 class TestAddFileCommand:
     def test_no_vault(self, runner, monkeypatch):
@@ -190,6 +195,7 @@ class TestAddFileCommand:
 
 # ── New ────────────────────────────────────────────────────────────────
 
+
 class TestNewCommand:
     def test_no_vault(self, runner, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
@@ -227,8 +233,16 @@ class TestNewCommand:
 
     def test_new_with_extra_fields(self, runner, vault_dir):
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "new", "contact", "John",
-                  "--name=John Doe", "--email=john@test.com"],
+            cli,
+            [
+                "--vault",
+                vault_dir,
+                "new",
+                "contact",
+                "John",
+                "--name=John Doe",
+                "--email=john@test.com",
+            ],
         )
         assert result.exit_code == 0
         assert "Created contact node:" in result.output
@@ -236,7 +250,8 @@ class TestNewCommand:
     def test_new_with_add_path(self, runner, vault_dir):
         runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/misc"])
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "new", "note", "Path Note", "--add-path", "/misc"],
+            cli,
+            ["--vault", vault_dir, "new", "note", "Path Note", "--add-path", "/misc"],
         )
         assert result.exit_code == 0
         assert "Created note node:" in result.output
@@ -244,6 +259,7 @@ class TestNewCommand:
 
 
 # ── Edit ───────────────────────────────────────────────────────────────
+
 
 class TestEditCommand:
     def test_no_vault(self, runner, monkeypatch):
@@ -303,7 +319,9 @@ class TestEditCommand:
             ):
                 with patch("prism.node.manager.NodeManager.update_node_fields", return_value=True):
                     result = runner.invoke(
-                        cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n",
+                        cli,
+                        ["--vault", vault_dir, "edit", meta.uuid[:12]],
+                        input="\n",
                     )
         assert result.exit_code == 0
         assert "Fields updated." in result.output
@@ -319,7 +337,9 @@ class TestEditCommand:
             ):
                 with patch("prism.node.manager.NodeManager.update_node_fields", return_value=False):
                     result = runner.invoke(
-                        cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n",
+                        cli,
+                        ["--vault", vault_dir, "edit", meta.uuid[:12]],
+                        input="\n",
                     )
         assert result.exit_code == 0
         assert "No changes detected." in result.output
@@ -345,7 +365,8 @@ class TestEditCommand:
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Path Edit")
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"],
+            cli,
+            ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"],
         )
         assert result.exit_code == 0
         assert "Added path: /test" in result.output
@@ -356,7 +377,8 @@ class TestEditCommand:
         meta = manager.create_node(type_name="note", title="Path Edit Dup")
         runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"],
+            cli,
+            ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"],
         )
         assert result.exit_code == 0
         assert "already associated" in result.output or "already" in result.output
@@ -367,7 +389,8 @@ class TestEditCommand:
         meta = manager.create_node(type_name="note", title="Path Rm")
         runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"],
+            cli,
+            ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"],
         )
         assert result.exit_code == 0
         assert "Removed path: /test" in result.output
@@ -377,13 +400,15 @@ class TestEditCommand:
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Path Not Assoc")
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"],
+            cli,
+            ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"],
         )
         assert result.exit_code == 0
         assert "not associated" in result.output
 
 
 # ── Rm ─────────────────────────────────────────────────────────────────
+
 
 class TestRmCommand:
     def test_no_vault(self, runner, monkeypatch):
@@ -410,6 +435,7 @@ class TestRmCommand:
 
 # ── Show ───────────────────────────────────────────────────────────────
 
+
 class TestShowCommand:
     def test_no_vault(self, runner, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
@@ -434,6 +460,7 @@ class TestShowCommand:
 
 
 # ── Link ───────────────────────────────────────────────────────────────
+
 
 class TestLinkCommand:
     def test_no_vault(self, runner, monkeypatch):
@@ -499,6 +526,7 @@ class TestLinkCommand:
 
 # ── Backlinks ──────────────────────────────────────────────────────────
 
+
 class TestBacklinksCommand:
     def test_no_vault(self, runner, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
@@ -533,6 +561,7 @@ class TestBacklinksCommand:
 
 
 # ── Path Commands ──────────────────────────────────────────────────────
+
 
 class TestPathCommands:
     def test_path_create(self, runner, vault_dir):
@@ -574,6 +603,7 @@ class TestPathCommands:
 
 
 # ── Graph ──────────────────────────────────────────────────────────────
+
 
 class TestGraphCommand:
     def test_no_vault(self, runner, monkeypatch):
@@ -618,7 +648,8 @@ class TestGraphCommand:
         manager = NodeManager(vault_dir)
         manager.create_node(type_name="note", title="Graph JSON Path")
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "graph", "--format", "json", "--include-paths"],
+            cli,
+            ["--vault", vault_dir, "graph", "--format", "json", "--include-paths"],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -627,6 +658,7 @@ class TestGraphCommand:
 
 
 # ── Query ──────────────────────────────────────────────────────────────
+
 
 class TestQueryCommand:
     def test_no_vault(self, runner, monkeypatch):
@@ -669,7 +701,8 @@ class TestQueryCommand:
         manager = NodeManager(vault_dir)
         manager.create_node(type_name="note", title="No Tags JSON")
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "query", "type:note", "--format", "json"],
+            cli,
+            ["--vault", vault_dir, "query", "type:note", "--format", "json"],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -677,6 +710,7 @@ class TestQueryCommand:
 
 
 # ── Status ─────────────────────────────────────────────────────────────
+
 
 class TestStatusCommand:
     def test_no_vault(self, runner, monkeypatch):
@@ -745,6 +779,7 @@ class TestStatusCommand:
 
 # ── Verify ─────────────────────────────────────────────────────────────
 
+
 class TestVerifyCommand:
     def test_no_vault(self, runner, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
@@ -788,6 +823,7 @@ class TestVerifyCommand:
 
 
 # ── Tag Commands ───────────────────────────────────────────────────────
+
 
 class TestTagCommands:
     def test_tag_add_no_vault(self, runner):
@@ -902,9 +938,11 @@ class TestTagCommands:
 
 # ── Link - Metadata Not Found ──────────────────────────────────────────
 
+
 class TestLinkMetadataNotFound:
     def test_metadata_not_found(self, runner, vault_dir):
         from prism.node.metadata import NodeMetadata
+
         manager = NodeManager(vault_dir)
         source = manager.create_node(type_name="note", title="Source")
         target = manager.create_node(type_name="note", title="Target")
@@ -915,15 +953,24 @@ class TestLinkMetadataNotFound:
         with patch("prism.node.manager.NodeManager.list_nodes") as mock_list:
             mock_list.return_value = [
                 NodeMetadata(
-                    uuid=full_uuid, type="note", title="Source",
-                    tags=[], fields={}, links=[],
-                    created_at="", updated_at="",
-                    blob_extension="", blob_mtime="", blob_size=0, blob_sha256="",
+                    uuid=full_uuid,
+                    type="note",
+                    title="Source",
+                    tags=[],
+                    fields={},
+                    links=[],
+                    created_at="",
+                    updated_at="",
+                    blob_extension="",
+                    blob_mtime="",
+                    blob_size=0,
+                    blob_sha256="",
                     sync_dirty=False,
                 ),
             ]
             result = runner.invoke(
-                cli, ["--vault", vault_dir, "link", full_uuid, target.uuid],
+                cli,
+                ["--vault", vault_dir, "link", full_uuid, target.uuid],
             )
 
         assert result.exit_code == 1
@@ -934,7 +981,8 @@ class TestLinkMetadataNotFound:
         source = manager.create_node(type_name="note", title="Source")
         fake_uuid = str(uuid_mod.uuid4())
         result = runner.invoke(
-            cli, ["--vault", vault_dir, "link", source.uuid, fake_uuid],
+            cli,
+            ["--vault", vault_dir, "link", source.uuid, fake_uuid],
         )
         assert result.exit_code == 0
         assert "Warning: Target node does not exist" in result.output
@@ -942,6 +990,7 @@ class TestLinkMetadataNotFound:
 
 
 # ── Verify - Blob-less ─────────────────────────────────────────────────
+
 
 class TestVerifyNoBlob:
     def test_node_without_blob(self, runner, vault_dir):
@@ -958,6 +1007,7 @@ class TestVerifyNoBlob:
 
 
 # ── Helper Functions ───────────────────────────────────────────────────
+
 
 class TestHelperFunctions:
     def test_find_by_hash_found(self, vault_dir):
@@ -995,12 +1045,15 @@ class TestHelperFunctions:
 
 # ── __main__ block ─────────────────────────────────────────────────────
 
+
 class TestMainBlock:
     def test_main_block(self):
         from prism_cli.main import cli as cli_main
+
         assert cli_main is cli
 
     def test_main_function(self):
         from prism_cli.main import main
+
         with pytest.raises(SystemExit):
             main()

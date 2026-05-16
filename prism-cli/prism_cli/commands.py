@@ -4,6 +4,7 @@ Implements all vault operations: init, create, edit, delete, query,
 link, import, tag management, path management, and graph export.
 Each function returns a CmdResult dataclass.
 """
+
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -31,6 +32,7 @@ class CmdResult:
         code: Machine-readable error code.
         data: Response payload.
     """
+
     ok: bool
     error: str = ""
     code: str = ""
@@ -93,11 +95,14 @@ def init_vault(path: str) -> CmdResult:
     try:
         vault = Vault.init(path)
         write_builtin_types(vault)
-        return CmdResult(ok=True, data={
-            "vault": vault,
-            "path": vault.path,
-            "vault_uuid": vault.vault_uuid,
-        })
+        return CmdResult(
+            ok=True,
+            data={
+                "vault": vault,
+                "path": vault.path,
+                "vault_uuid": vault.vault_uuid,
+            },
+        )
     except FileExistsError as e:
         return CmdResult(ok=False, error=str(e), code="ALREADY_EXISTS", data={})
 
@@ -183,7 +188,8 @@ def verify_node(vault: Vault, uuid: str) -> CmdResult:
 
 
 def export_graph(
-    vault: Vault, output_format: str = "dot",
+    vault: Vault,
+    output_format: str = "dot",
     include_paths: bool = False,
 ) -> CmdResult:
     """Export the node graph in DOT or JSON format.
@@ -327,20 +333,26 @@ def create_node(
             try:
                 path_uuid = resolver.resolve(add_path)
             except ValueError:
-                return CmdResult(ok=True, data={
-                    "meta": meta,
-                    "warning": f"Path does not exist: {add_path}",
-                })
+                return CmdResult(
+                    ok=True,
+                    data={
+                        "meta": meta,
+                        "warning": f"Path does not exist: {add_path}",
+                    },
+                )
             meta.paths.append(path_uuid)
             storage_dir = compute_storage_path(vault.path, meta.uuid)
             meta_path = NodeMetadata.metadata_path(storage_dir)
             meta.save(meta_path)
             path_added = add_path
 
-        return CmdResult(ok=True, data={
-            "meta": meta,
-            "path_added": path_added,
-        })
+        return CmdResult(
+            ok=True,
+            data={
+                "meta": meta,
+                "path_added": path_added,
+            },
+        )
     except ValueError as e:
         return CmdResult(ok=False, error=str(e), code="VALIDATION_ERROR", data={})
 
@@ -410,12 +422,15 @@ def edit_node_body(vault: Vault, uuid: str) -> CmdResult:
 
     if body_info is not None:
         body_path, original_mtime = body_info
-        return CmdResult(ok=True, data={
-            "type": "body",
-            "uuid": full_uuid,
-            "body_path": body_path,
-            "original_mtime": original_mtime,
-        })
+        return CmdResult(
+            ok=True,
+            data={
+                "type": "body",
+                "uuid": full_uuid,
+                "body_path": body_path,
+                "original_mtime": original_mtime,
+            },
+        )
 
     return CmdResult(ok=False, error="Node has no body", code="NO_BODY", data={"uuid": full_uuid})
 
@@ -443,12 +458,15 @@ def edit_node_fields(vault: Vault, uuid: str) -> CmdResult:
     except ValueError as e:
         return CmdResult(ok=False, error=str(e), code="VALIDATION_ERROR", data={})
 
-    return CmdResult(ok=True, data={
-        "type": "fields",
-        "uuid": full_uuid,
-        "schema": schema,
-        "current_values": current_values,
-    })
+    return CmdResult(
+        ok=True,
+        data={
+            "type": "fields",
+            "uuid": full_uuid,
+            "schema": schema,
+            "current_values": current_values,
+        },
+    )
 
 
 def commit_body_edit(
@@ -524,8 +542,10 @@ def link_nodes(vault: Vault, source_uuid: str, target_uuid: str) -> CmdResult:
 
     if source is None:
         return CmdResult(
-            ok=False, error=f"Source node not found: {source_uuid}",
-            code="NOT_FOUND", data={},
+            ok=False,
+            error=f"Source node not found: {source_uuid}",
+            code="NOT_FOUND",
+            data={},
         )
 
     warning = None
@@ -549,8 +569,10 @@ def link_nodes(vault: Vault, source_uuid: str, target_uuid: str) -> CmdResult:
 
     if meta_path is None:
         return CmdResult(
-            ok=False, error=f"Could not find metadata for {source_uuid}",
-            code="NOT_FOUND", data={},
+            ok=False,
+            error=f"Could not find metadata for {source_uuid}",
+            code="NOT_FOUND",
+            data={},
         )
 
     source_meta = NodeMetadata.from_toml(meta_path)
@@ -594,8 +616,10 @@ def import_file(
     source_path = os.path.abspath(source_path)
     if not os.path.exists(source_path):
         return CmdResult(
-            ok=False, error=f"File not found: {source_path}",
-            code="NOT_FOUND", data={},
+            ok=False,
+            error=f"File not found: {source_path}",
+            code="NOT_FOUND",
+            data={},
         )
 
     file_hash = sha256_file(source_path)
@@ -604,8 +628,12 @@ def import_file(
     if not force:
         existing = find_by_hash(manager, file_hash)
         if existing.ok:
-            return CmdResult(ok=False, error=f"File already exists as node {existing.data['uuid']}",
-                             code="ALREADY_EXISTS", data=existing.data)
+            return CmdResult(
+                ok=False,
+                error=f"File already exists as node {existing.data['uuid']}",
+                code="ALREADY_EXISTS",
+                data=existing.data,
+            )
 
     actual_type = type_name or "file"
     try:
@@ -641,8 +669,10 @@ def manage_tags(
     if action == "add":
         if not uuid or not tags:
             return CmdResult(
-                ok=False, error="Usage: tag add <uuid> <tag> [<tag>...]",
-                code="USAGE", data={},
+                ok=False,
+                error="Usage: tag add <uuid> <tag> [<tag>...]",
+                code="USAGE",
+                data={},
             )
         try:
             full_uuid = resolve_uuid(vault.path, uuid)
@@ -663,8 +693,10 @@ def manage_tags(
     elif action == "rm":
         if not uuid or not tags:
             return CmdResult(
-                ok=False, error="Usage: tag rm <uuid> <tag> [<tag>...]",
-                code="USAGE", data={},
+                ok=False,
+                error="Usage: tag rm <uuid> <tag> [<tag>...]",
+                code="USAGE",
+                data={},
             )
         try:
             full_uuid = resolve_uuid(vault.path, uuid)
@@ -686,8 +718,10 @@ def manage_tags(
     elif action == "rename":
         if not tags or len(tags) < 2:
             return CmdResult(
-                ok=False, error="Usage: tag rename <old-tag> <new-tag>",
-                code="USAGE", data={},
+                ok=False,
+                error="Usage: tag rename <old-tag> <new-tag>",
+                code="USAGE",
+                data={},
             )
         old_tag, new_tag = tags[0], tags[1]
         try:
@@ -695,16 +729,20 @@ def manage_tags(
             return CmdResult(
                 ok=True,
                 data={
-                    "action": "rename", "old_tag": old_tag,
-                    "new_tag": new_tag, "affected": affected,
+                    "action": "rename",
+                    "old_tag": old_tag,
+                    "new_tag": new_tag,
+                    "affected": affected,
                 },
             )
         except ValueError as e:
             return CmdResult(ok=False, error=str(e), code="VALIDATION_ERROR", data={})
 
     return CmdResult(
-        ok=False, error=f"Unknown tag action: {action}",
-        code="UNKNOWN_ACTION", data={},
+        ok=False,
+        error=f"Unknown tag action: {action}",
+        code="UNKNOWN_ACTION",
+        data={},
     )
 
 
@@ -731,7 +769,8 @@ def manage_paths(
         try:
             leaf_uuid = resolver.resolve_or_create(path_str)
             return CmdResult(
-                ok=True, data={"action": "create", "path": path_str, "leaf_uuid": leaf_uuid},
+                ok=True,
+                data={"action": "create", "path": path_str, "leaf_uuid": leaf_uuid},
             )
         except ValueError as e:
             return CmdResult(ok=False, error=str(e), code="VALIDATION_ERROR", data={})
@@ -762,10 +801,14 @@ def manage_paths(
             if os.path.exists(sdir):
                 shutil.rmtree(sdir)
 
-        return CmdResult(ok=True, data={
-            "action": "rm", "path": path_str,
-            "removed_uuids": all_uuids,
-        })
+        return CmdResult(
+            ok=True,
+            data={
+                "action": "rm",
+                "path": path_str,
+                "removed_uuids": all_uuids,
+            },
+        )
 
     elif action == "tree":
         try:
@@ -817,6 +860,8 @@ def manage_paths(
         return CmdResult(ok=True, data={"action": "tree", "tree": tree})
 
     return CmdResult(
-        ok=False, error=f"Unknown path action: {action}",
-        code="UNKNOWN_ACTION", data={},
+        ok=False,
+        error=f"Unknown path action: {action}",
+        code="UNKNOWN_ACTION",
+        data={},
     )

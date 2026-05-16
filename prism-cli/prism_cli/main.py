@@ -3,6 +3,7 @@
 Defines all CLI commands, groups (tag, path, vault), and the main
 entry point. Delegates business logic to `commands.py`.
 """
+
 import json
 import os
 import subprocess
@@ -26,9 +27,11 @@ from .tutor import Tutor
 @click.option("--vault", "-v", default=None, help="Path to vault directory")
 @click.option("--verbose", is_flag=True, help="Enable verbose output")
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["table", "json"]),
-    default="table", help="Output format",
+    default="table",
+    help="Output format",
 )
 @click.version_option(VERSION, prog_name="prism")
 @click.pass_context
@@ -168,7 +171,7 @@ def tree(ctx: click.Context, path_str: str) -> None:
         for i, child in enumerate(children):
             _render(child, child_prefix, i == len(children) - 1)
 
-    suffix = f" ({tree_data['ref_count']} nodes)" if tree_data['ref_count'] > 0 else ""
+    suffix = f" ({tree_data['ref_count']} nodes)" if tree_data["ref_count"] > 0 else ""
     click.echo(f"{tree_data['name']}{suffix}")
     for i, child in enumerate(tree_data.get("children", [])):
         _render(child, "", i == len(tree_data["children"]) - 1)
@@ -341,8 +344,11 @@ def add_file(ctx: click.Context, source_path: str, type_name: Optional[str]) -> 
 @click.option("--add-path", "-a", "add_path", default=None, help="Associate node with a path")
 @click.pass_context
 def new(
-    ctx: click.Context, type_name: str, title: str,
-    tags: tuple[str, ...], add_path: Optional[str],
+    ctx: click.Context,
+    type_name: str,
+    title: str,
+    tags: tuple[str, ...],
+    add_path: Optional[str],
 ) -> None:
     """Create a new typed node."""
     vault: Optional[Vault] = ctx.obj.get("vault")
@@ -365,7 +371,9 @@ def new(
     explicit_fields.update(extra_fields)
 
     result = commands.create_node(
-        vault, type_name, title,
+        vault,
+        type_name,
+        title,
         fields=explicit_fields,
         tags=list(tags) if tags else None,
         add_path=add_path,
@@ -384,8 +392,10 @@ def new(
 
 
 def _do_edit_path_ops(
-    vault: Vault, uuid: str,
-    add_path: Optional[str], remove_path: Optional[str],
+    vault: Vault,
+    uuid: str,
+    add_path: Optional[str],
+    remove_path: Optional[str],
 ) -> bool:
     """Handle add/remove path operations. Returns True if a path op was handled."""
     if add_path is not None or remove_path is not None:
@@ -414,8 +424,10 @@ def _do_edit_path_ops(
 @click.option("--remove-path", "-r", "remove_path", default=None, help="Remove node from a path")
 @click.pass_context
 def edit(
-    ctx: click.Context, uuid: str,
-    add_path: Optional[str], remove_path: Optional[str],
+    ctx: click.Context,
+    uuid: str,
+    add_path: Optional[str],
+    remove_path: Optional[str],
 ) -> None:
     """Edit a node's body or fields."""
     vault: Optional[Vault] = ctx.obj.get("vault")
@@ -579,11 +591,17 @@ def backlinks(ctx: click.Context, uuid: str) -> None:
 
 @cli.command()
 @click.option(
-    "--format", "output_format",
-    type=click.Choice(["dot", "json"]), default="dot", help="Graph format",
+    "--format",
+    "output_format",
+    type=click.Choice(["dot", "json"]),
+    default="dot",
+    help="Graph format",
 )
 @click.option(
-    "--include-paths", "-p", is_flag=True, default=False,
+    "--include-paths",
+    "-p",
+    is_flag=True,
+    default=False,
     help="Include path nodes in export",
 )
 @click.pass_context
@@ -601,8 +619,11 @@ def graph(ctx: click.Context, output_format: str, include_paths: bool) -> None:
 @cli.command()
 @click.argument("query_str")
 @click.option(
-    "--format", "output_format",
-    type=click.Choice(["table", "json"]), default="table", help="Output format",
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
 )
 @click.pass_context
 def query(ctx: click.Context, query_str: str, output_format: str) -> None:
@@ -690,6 +711,7 @@ def status(ctx: click.Context) -> None:
             confirm = "n"
         if confirm == "y":
             from prism.tracking import ChangeTracker
+
             tracker = ChangeTracker(vault.path)
             tracker.re_extract_links(node["uuid"])
 

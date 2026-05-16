@@ -4,7 +4,6 @@ import tempfile
 import uuid
 
 import pytest
-
 from prism.node.storage import StorageEngine, compute_storage_path, sha256_file
 
 

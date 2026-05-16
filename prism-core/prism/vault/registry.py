@@ -17,6 +17,7 @@ class VaultRegistry:
     Stores vault entries in ~/.config/prism/vaults.toml with add,
     remove, list, and lookup operations.
     """
+
     def __init__(self) -> None:
         """Initialize the registry, ensuring the config directory exists."""
         self._ensure_config_dir()

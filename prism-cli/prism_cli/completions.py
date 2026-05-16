@@ -3,6 +3,7 @@
 Provides completions for commands, UUIDs, type names, tags, and paths
 for use with readline in the interactive REPL session.
 """
+
 import os
 from typing import Any, Optional
 
@@ -30,11 +31,13 @@ def complete_command(text: str, aliases: dict[str, str]) -> list[str]:
     Returns:
         Sorted list of matching command names.
     """
-    all_commands = sorted(set(
-        list(aliases.keys())
-        + list(aliases.values())
-        + ["init", "open", "help", "history", "exit", "quit", "rm", "path"]
-    ))
+    all_commands = sorted(
+        set(
+            list(aliases.keys())
+            + list(aliases.values())
+            + ["init", "open", "help", "history", "exit", "quit", "rm", "path"]
+        )
+    )
     if not text:
         return all_commands
     return [c for c in all_commands if c.startswith(text)]

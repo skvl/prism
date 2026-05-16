@@ -3,7 +3,6 @@ import shutil
 import tempfile
 
 import pytest
-
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
@@ -92,6 +91,7 @@ class TestChangeTracker:
 
     def test_re_extract_links_no_blob(self, vault_dir):
         from prism.types.builtins import CONTACT_TOML
+
         types_dir = os.path.join(vault_dir, ".metadata", "types")
         with open(os.path.join(types_dir, "contact.toml"), "w") as f:
             f.write(CONTACT_TOML)
@@ -113,6 +113,7 @@ class TestChangeTracker:
     def test_update_blob_info_no_blob(self, vault_dir):
         manager = NodeManager(vault_dir)
         from prism.types.builtins import CONTACT_TOML
+
         types_dir = os.path.join(vault_dir, ".metadata", "types")
         with open(os.path.join(types_dir, "contact.toml"), "w") as f:
             f.write(CONTACT_TOML)
@@ -130,6 +131,7 @@ class TestChangeTracker:
 
     def test_status_with_corrupt_metadata(self, vault_dir):
         import uuid
+
         bad_uid = str(uuid.uuid4())
         storage_dir = compute_storage_path(vault_dir, bad_uid)
         os.makedirs(storage_dir, exist_ok=True)

@@ -9,6 +9,12 @@ from prism.types.schema import FieldDef, TypeSchema
 from prism.types.validator import FieldValidator
 
 __all__ = [
-    "FieldDef", "TypeSchema", "TypeLoader", "FieldValidator",
-    "NOTE_TOML", "CONTACT_TOML", "BOOKMARK_TOML", "FILE_TOML",
+    "FieldDef",
+    "TypeSchema",
+    "TypeLoader",
+    "FieldValidator",
+    "NOTE_TOML",
+    "CONTACT_TOML",
+    "BOOKMARK_TOML",
+    "FILE_TOML",
 ]

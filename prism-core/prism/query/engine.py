@@ -19,6 +19,7 @@ class QueryEngine:
 
     Supports tag, type, path, and text search with AND/OR/NOT logic.
     """
+
     def __init__(self, vault_path: str) -> None:
         """Initialize the query engine.
 
@@ -117,7 +118,8 @@ class QueryEngine:
                 try:
                     result = subprocess.run(
                         ["grep", "-l", text, body_path],
-                        capture_output=True, text=True,
+                        capture_output=True,
+                        text=True,
                     )
                     if result.returncode == 0:
                         return True

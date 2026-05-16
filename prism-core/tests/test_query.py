@@ -3,7 +3,6 @@ import shutil
 import tempfile
 
 import pytest
-
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.query.engine import QueryEngine

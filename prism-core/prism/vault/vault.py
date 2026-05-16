@@ -51,9 +51,14 @@ class Vault:
     Provides class methods for initializing and opening vaults,
     and an instance method for validating vault structure.
     """
+
     def __init__(
-        self, path: str, vault_uuid: str, schema_version: int,
-        created_at: str, path_root_uuid: str = "",
+        self,
+        path: str,
+        vault_uuid: str,
+        schema_version: int,
+        created_at: str,
+        path_root_uuid: str = "",
     ) -> None:
         """Initialize a Vault instance.
 

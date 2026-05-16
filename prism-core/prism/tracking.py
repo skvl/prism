@@ -15,6 +15,7 @@ from prism.node.storage import compute_storage_path, sha256_file
 
 class ChangeTracker:
     """Tracks changes to vault nodes: modified bodies, new files, orphaned nodes."""
+
     def __init__(self, vault_path: str) -> None:
         """Initialize the change tracker.
 
@@ -58,11 +59,13 @@ class ChangeTracker:
                                 if body_path and os.path.exists(body_path):
                                     current_mtime = str(os.stat(body_path).st_mtime)
                                     if current_mtime != meta.blob_mtime:
-                                        changed_nodes.append({
-                                            "uuid": meta.uuid,
-                                            "title": meta.title,
-                                            "type": meta.type,
-                                        })
+                                        changed_nodes.append(
+                                            {
+                                                "uuid": meta.uuid,
+                                                "title": meta.title,
+                                                "type": meta.type,
+                                            }
+                                        )
                         except Exception:
                             continue
 

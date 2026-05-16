@@ -5,7 +5,6 @@ import uuid
 from pathlib import Path
 
 import pytest
-
 from prism.graph.links import BacklinkIndex, GraphExporter, LinkExtractor
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
@@ -27,8 +26,7 @@ class TestLinkExtractor:
 
     def test_extract_multiple_links(self):
         body = (
-            "[[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]] "
-            "and [[f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f]]"
+            "[[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]] and [[f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f]]"
         )
         links = LinkExtractor.extract_links(body)
         assert len(links) == 2
@@ -170,6 +168,7 @@ class TestResolveCrossVaultLink:
         tmp_reg = Path(tempfile.mkdtemp()) / "vaults.toml"
         monkeypatch.setattr("prism.vault.registry.REGISTRY_PATH", tmp_reg)
         from prism.vault.registry import VaultRegistry
+
         reg = VaultRegistry()
         vault = Vault.open(d)
         reg.add(vault.vault_uuid, d)
@@ -183,6 +182,7 @@ class TestResolveCrossVaultLink:
         tmp_reg = Path(tempfile.mkdtemp()) / "vaults.toml"
         monkeypatch.setattr("prism.vault.registry.REGISTRY_PATH", tmp_reg)
         from prism.vault.registry import VaultRegistry
+
         reg = VaultRegistry()
         vault = Vault.open(d)
         reg.add(vault.vault_uuid, d)
@@ -196,6 +196,7 @@ class TestResolveCrossVaultLink:
         tmp_reg = Path(tempfile.mkdtemp()) / "vaults.toml"
         monkeypatch.setattr("prism.vault.registry.REGISTRY_PATH", tmp_reg)
         from prism.vault.registry import VaultRegistry
+
         reg = VaultRegistry()
         vault = Vault.open(d)
         reg.add(vault.vault_uuid, d)

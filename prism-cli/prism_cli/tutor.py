@@ -4,6 +4,7 @@ Provides 8 guided lessons covering vault init, nodes, types, links,
 queries, file import, tags, and change tracking. Each lesson has
 multiple steps with concept explanations, commands, and verification.
 """
+
 import os
 import shutil
 import signal
@@ -20,6 +21,7 @@ from prism.vault.vault import Vault
 
 class StepResult(Enum):
     """Result of executing a tutorial step."""
+
     SUCCESS = "success"
     WARNING_RETRY = "warning_retry"
     SKIP = "skip"
@@ -36,6 +38,7 @@ class Step:
         verify: Callback to verify the step was completed correctly.
         warning: Warning message shown on failure.
     """
+
     number: int
     concept: str
     command: str
@@ -54,6 +57,7 @@ class Lesson:
         steps: Ordered list of steps in the lesson.
         summary: Recap shown after completing all steps.
     """
+
     number: int
     title: str
     concept: str
@@ -71,6 +75,7 @@ class Tutor:
     covering vault init, nodes, types, links, queries, file import,
     tags, and change tracking.
     """
+
     def __init__(self, lesson_number: int = 1) -> None:
         """Initialize the tutor.
 
@@ -261,6 +266,7 @@ class Tutor:
             True if the count matches.
         """
         from prism.node.manager import NodeManager
+
         manager = NodeManager(vault.path)
         nodes = manager.list_nodes()
         matching = [n for n in nodes if n.type == expected_type]
@@ -279,6 +285,7 @@ class Tutor:
         """
         from prism.node.metadata import NodeMetadata
         from prism.node.storage import compute_storage_path
+
         storage_dir = compute_storage_path(vault.path, uuid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         if not os.path.exists(meta_path):
@@ -300,6 +307,7 @@ class Tutor:
         from prism.node.manager import resolve_uuid
         from prism.node.metadata import NodeMetadata
         from prism.node.storage import compute_storage_path
+
         try:
             full_source = resolve_uuid(vault.path, source_uuid)
         except ValueError:
@@ -323,6 +331,7 @@ class Tutor:
             True if the backlink exists.
         """
         from prism.graph.links import BacklinkIndex
+
         index = BacklinkIndex(vault.path)
         backlinks = index.get_backlinks(target_uuid)
         return any(bl["uuid"] == expected_source_uuid for bl in backlinks)
@@ -340,6 +349,7 @@ class Tutor:
         """
         from prism.query.engine import QueryEngine
         from prism.query.parser import QueryParser
+
         parser = QueryParser()
         ast = parser.parse(query_str)
         engine = QueryEngine(vault.path)
@@ -358,6 +368,7 @@ class Tutor:
             True if a node with the hash exists.
         """
         from prism.node.manager import NodeManager
+
         manager = NodeManager(vault.path)
         nodes = manager.list_nodes()
         return any(n.blob_sha256 == file_hash for n in nodes)
@@ -375,6 +386,7 @@ class Tutor:
         from prism.node.manager import NodeManager
         from prism.node.metadata import NodeMetadata
         from prism.node.storage import compute_storage_path
+
         storage_dir = compute_storage_path(vault.path, uuid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         if not os.path.exists(meta_path):
@@ -393,6 +405,7 @@ class Tutor:
             True if changed nodes exist.
         """
         from prism.tracking import ChangeTracker
+
         tracker = ChangeTracker(vault.path)
         report = tracker.status()
         return len(report.get("changed", [])) > 0
@@ -408,6 +421,7 @@ class Tutor:
             True if the tag count meets or exceeds expected.
         """
         from prism.node.manager import NodeManager
+
         manager = NodeManager(vault.path)
         tags_dict = manager.list_tags()
         return len(tags_dict) >= expected
@@ -424,6 +438,7 @@ class Tutor:
             True if old_tag is gone and new_tag exists.
         """
         from prism.node.manager import NodeManager
+
         manager = NodeManager(vault.path)
         tags_dict = manager.list_tags()
         return old_tag not in tags_dict and new_tag in tags_dict
@@ -443,6 +458,7 @@ class Tutor:
             The node UUID, or None if not found.
         """
         from prism.node.manager import NodeManager
+
         manager = NodeManager(vault.path)
         nodes = manager.list_nodes()
         for n in nodes:
@@ -460,6 +476,7 @@ class Tutor:
             Hex digest string.
         """
         from prism.node.storage import sha256_file
+
         return sha256_file(path)
 
     def _init_blob_mtime(self, uid: str) -> None:
@@ -472,6 +489,7 @@ class Tutor:
             return
         from prism.node.metadata import NodeMetadata
         from prism.node.storage import compute_storage_path
+
         storage_dir = compute_storage_path(self.vault.path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         if not os.path.exists(meta_path):
@@ -557,6 +575,7 @@ class Tutor:
         if self.vault is None:
             return
         from prism.node.storage import compute_storage_path
+
         uid = self._get_node_uuid_by_title(self.vault, title)
         if uid is None:
             return
@@ -641,14 +660,14 @@ class Tutor:
             number=1,
             title="What's a vault?",
             concept="A vault is a folder that holds all your notes, contacts, and files. "
-                    "Prism organizes everything inside this directory, with metadata and "
-                    "storage managed automatically.",
+            "Prism organizes everything inside this directory, with metadata and "
+            "storage managed automatically.",
             steps=[
                 Step(
                     number=1,
                     concept="First, let's create a vault in this directory. "
-                            "`prism init` sets up the .metadata and .storage directories "
-                            "that Prism needs.",
+                    "`prism init` sets up the .metadata and .storage directories "
+                    "that Prism needs.",
                     command="prism init .",
                     verify=self._verify_vault_init,
                     warning="Make sure you ran `prism init .`",
@@ -656,34 +675,34 @@ class Tutor:
                 Step(
                     number=2,
                     concept="`prism status` shows the current state of your vault. "
-                            "Since we just created it, everything should be clean.",
+                    "Since we just created it, everything should be clean.",
                     command="prism status",
                     verify=self._verify_vault_init,
                     warning="Try running `prism status`",
                 ),
             ],
             summary="Your vault is ready. It has a .metadata directory for configuration "
-                    "and a .storage directory where your data lives.",
+            "and a .storage directory where your data lives.",
         )
 
         l2 = Lesson(
             number=2,
             title="Your first note",
             concept="A node is a typed 'thing' in your vault. Notes are the most common "
-                    "type — they have a title, optional tags, and a markdown body.",
+            "type — they have a title, optional tags, and a markdown body.",
             steps=[
                 Step(
                     number=1,
                     concept="Let's create your first note. The `--tag` flag adds a tag, "
-                            "which helps you find things later.",
+                    "which helps you find things later.",
                     command='prism new note "My first note" --tag ideas',
                     verify=lambda v: self._verify_node_count(v, 1, "note"),
-                    warning="Try: prism new note \"My first note\" --tag ideas",
+                    warning='Try: prism new note "My first note" --tag ideas',
                 ),
                 Step(
                     number=2,
                     concept="`prism show` displays a node's details including its type, "
-                            "tags, fields, and body content.",
+                    "tags, fields, and body content.",
                     command="prism show {note1}",
                     verify=lambda v: self._verify_node_count(v, 1, "note"),
                     warning="Use the UUID from the previous step",
@@ -691,141 +710,151 @@ class Tutor:
                 Step(
                     number=3,
                     concept="You can find nodes by tag using the query command. "
-                            "`prism query tag:ideas` finds everything tagged 'ideas'.",
+                    "`prism query tag:ideas` finds everything tagged 'ideas'.",
                     command="prism query tag:ideas",
                     verify=lambda v: self._verify_query_result(
-                        v, "tag:ideas", self._resolve_uuid("note1"),
+                        v,
+                        "tag:ideas",
+                        self._resolve_uuid("note1"),
                     ),
                     warning="Try: prism query tag:ideas",
                 ),
             ],
             summary="You created a note, viewed its details, and found it with a tag query. "
-                    "Every node in Prism works the same way.",
+            "Every node in Prism works the same way.",
         )
 
         l3 = Lesson(
             number=3,
             title="Different kinds of things",
             concept="Types give nodes the right fields for their purpose. A contact has "
-                    "a name and email, a bookmark has a URL. Prism comes with 4 built-in "
-                    "types: note, contact, bookmark, and file.",
+            "a name and email, a bookmark has a URL. Prism comes with 4 built-in "
+            "types: note, contact, bookmark, and file.",
             steps=[
                 Step(
                     number=1,
                     concept="Create a contact node. Contacts have structured fields "
-                            "like name and email.",
-                    command='prism new contact Alice --name=Alice --email=alice@example.com',
+                    "like name and email.",
+                    command="prism new contact Alice --name=Alice --email=alice@example.com",
                     verify=lambda v: self._verify_node_count(v, 1, "contact"),
-                    warning='Try: prism new contact Alice --name=Alice --email=alice@example.com',
+                    warning="Try: prism new contact Alice --name=Alice --email=alice@example.com",
                 ),
                 Step(
                     number=2,
                     concept="Create a bookmark to save a link. Bookmarks have a url field.",
-                    command='prism new bookmark Prism --url=https://prism.ai --tag favorite',
+                    command="prism new bookmark Prism --url=https://prism.ai --tag favorite",
                     verify=lambda v: self._verify_node_count(v, 1, "bookmark"),
-                    warning='Try: prism new bookmark Prism --url=https://prism.ai --tag favorite',
+                    warning="Try: prism new bookmark Prism --url=https://prism.ai --tag favorite",
                 ),
                 Step(
                     number=3,
                     concept="You can query by type too. "
-                            "`prism query type:contact` shows only contact nodes.",
+                    "`prism query type:contact` shows only contact nodes.",
                     command="prism query type:contact",
                     verify=lambda v: self._verify_query_result(
-                        v, "type:contact", self._resolve_uuid("alice"),
+                        v,
+                        "type:contact",
+                        self._resolve_uuid("alice"),
                     ),
                     warning="Try: prism query type:contact",
                 ),
             ],
             summary="Each type has its own set of fields. Contacts store contact info, "
-                    "bookmarks store URLs, and notes store markdown content.",
+            "bookmarks store URLs, and notes store markdown content.",
         )
 
         l4 = Lesson(
             number=4,
             title="Connecting ideas",
             concept="Knowledge isn't isolated. You can link related nodes together "
-                    "to show how they connect. Prism tracks these links and can "
-                    "show you the big picture.",
+            "to show how they connect. Prism tracks these links and can "
+            "show you the big picture.",
             steps=[
                 Step(
                     number=1,
                     concept="Create a second note so we have something to link to.",
                     command='prism new note "Second note" --tag ideas',
                     verify=lambda v: self._verify_node_count(v, 2, "note"),
-                    warning="Try: prism new note \"Second note\" --tag ideas",
+                    warning='Try: prism new note "Second note" --tag ideas',
                 ),
                 Step(
                     number=2,
                     concept="Link the first note to the second. "
-                            "`prism link <source> <target>` creates a directed connection.",
+                    "`prism link <source> <target>` creates a directed connection.",
                     command="prism link {note1} {note2}",
                     verify=lambda v: self._verify_link_exists(
-                        v, self._fmt.get("note1", ""), self._fmt.get("note2", ""),
+                        v,
+                        self._fmt.get("note1", ""),
+                        self._fmt.get("note2", ""),
                     ),
                     warning="Use the UUIDs of your two notes",
                 ),
                 Step(
                     number=3,
                     concept="`prism graph` shows all nodes and their connections "
-                            "as a graph. You can export as DOT or JSON.",
+                    "as a graph. You can export as DOT or JSON.",
                     command="prism graph",
                     verify=self._verify_always_true,
                     warning="Try: prism graph",
                 ),
             ],
             summary="Links show relationships between nodes. The graph command "
-                    "visualizes your vault as a connected network of ideas.",
+            "visualizes your vault as a connected network of ideas.",
         )
 
         l5 = Lesson(
             number=5,
             title="Finding things",
             concept="Prism has a powerful query language. You can combine tags, types, "
-                    "and text search with AND, OR, and NOT operators.",
+            "and text search with AND, OR, and NOT operators.",
             steps=[
                 Step(
                     number=1,
                     concept="Combine conditions with AND. This finds nodes tagged "
-                            "'ideas' that are also notes.",
+                    "'ideas' that are also notes.",
                     command='prism query "tag:ideas AND type:note"',
                     verify=lambda v: self._verify_query_result(
-                        v, "tag:ideas AND type:note", self._resolve_uuid("note1"),
+                        v,
+                        "tag:ideas AND type:note",
+                        self._resolve_uuid("note1"),
                     ),
-                    warning="Try: prism query \"tag:ideas AND type:note\"",
+                    warning='Try: prism query "tag:ideas AND type:note"',
                 ),
                 Step(
                     number=2,
                     concept="Use OR to find nodes matching any condition. "
-                            "This finds contacts or bookmarks.",
+                    "This finds contacts or bookmarks.",
                     command='prism query "type:contact OR type:bookmark"',
                     verify=lambda v: self._verify_query_result(
-                        v, "type:contact OR type:bookmark", self._resolve_uuid("alice"),
+                        v,
+                        "type:contact OR type:bookmark",
+                        self._resolve_uuid("alice"),
                     ),
                     warning='Try: prism query "type:contact OR type:bookmark"',
                 ),
                 Step(
                     number=3,
                     concept="Prism can also search inside note bodies. "
-                            "Let's search for text in your notes.",
+                    "Let's search for text in your notes.",
                     command='prism query "first"',
                     verify=self._verify_always_true,
-                    warning="Try: prism query \"first\"",
+                    warning='Try: prism query "first"',
                 ),
             ],
             summary="The query language lets you find exactly what you need. "
-                    "Combine tag:, type:, and text search with AND, OR, and NOT.",
+            "Combine tag:, type:, and text search with AND, OR, and NOT.",
         )
 
         l6 = Lesson(
             number=6,
             title="Files in the vault",
             concept="A vault can store any file. Prism tracks file integrity "
-                    "using SHA-256 hashes, so you always know your files are intact.",
+            "using SHA-256 hashes, so you always know your files are intact.",
             steps=[
                 Step(
                     number=1,
                     concept="First, let's create a simple text file "
-                            "that we'll import into the vault.",
+                    "that we'll import into the vault.",
                     command="echo 'Hello from Prism' > hello.txt",
                     verify=self._verify_always_true,
                     warning="Try: echo 'Hello from Prism' > hello.txt",
@@ -833,7 +862,7 @@ class Tutor:
                 Step(
                     number=2,
                     concept="`prism add-file <path>` imports a file into the vault. "
-                            "Prism copies it into .storage and computes its SHA-256 hash.",
+                    "Prism copies it into .storage and computes its SHA-256 hash.",
                     command="prism add-file hello.txt",
                     verify=lambda v: self._verify_node_count(v, 1, "file"),
                     warning="Try: prism add-file hello.txt",
@@ -841,45 +870,47 @@ class Tutor:
                 Step(
                     number=3,
                     concept="`prism verify <uuid>` checks that the stored file's hash "
-                            "matches. This confirms the file hasn't been corrupted.",
+                    "matches. This confirms the file hasn't been corrupted.",
                     command="prism verify {file1}",
                     verify=lambda v: self._verify_blob_integrity(v, self._resolve_uuid("file1")),
                     warning="Use the UUID from the import step",
                 ),
             ],
             summary="Files in Prism are content-addressed by SHA-256. "
-                    "You can always verify that your files are intact.",
+            "You can always verify that your files are intact.",
         )
 
         l7 = Lesson(
             number=7,
             title="Managing tags",
             concept="Tags help you organize and find nodes. You can add, remove, list, "
-                    "and rename tags after creating a node. Tags are universal — any "
-                    "node type can carry any tag.",
+            "and rename tags after creating a node. Tags are universal — any "
+            "node type can carry any tag.",
             steps=[
                 Step(
                     number=1,
                     concept="First, create a couple of notes we can tag. "
-                            "We'll use them to practice tag management.",
+                    "We'll use them to practice tag management.",
                     command='prism new note "Monday notes" --tag work',
                     verify=lambda v: self._verify_node_count(v, 1, "note"),
-                    warning="Try: prism new note \"Monday notes\" --tag work",
+                    warning='Try: prism new note "Monday notes" --tag work',
                 ),
                 Step(
                     number=2,
                     concept="Add more tags to an existing node with `prism tag add`. "
-                            "Tags are universal — you can add them to any node.",
-                    command='prism tag add {note1} meeting',
+                    "Tags are universal — you can add them to any node.",
+                    command="prism tag add {note1} meeting",
                     verify=lambda v: self._verify_node_has_tag(
-                        v, self._resolve_uuid("note1"), "meeting",
+                        v,
+                        self._resolve_uuid("note1"),
+                        "meeting",
                     ),
                     warning="Use the UUID from the previous step",
                 ),
                 Step(
                     number=3,
                     concept="List all tags in your vault with `prism tag list`. "
-                            "This shows every unique tag across all nodes.",
+                    "This shows every unique tag across all nodes.",
                     command="prism tag list",
                     verify=lambda v: self._verify_tag_count(v, 2),
                     warning="Try: prism tag list",
@@ -887,38 +918,42 @@ class Tutor:
                 Step(
                     number=4,
                     concept="You can remove tags too. `prism tag rm` removes a tag "
-                            "from a node. It's safe — removing a non-existent tag "
-                            "is a no-op.",
-                    command='prism tag rm {note1} meeting',
-                    verify=lambda v: not self._verify_node_has_tag(
-                        v, self._resolve_uuid("note1"), "meeting",
+                    "from a node. It's safe — removing a non-existent tag "
+                    "is a no-op.",
+                    command="prism tag rm {note1} meeting",
+                    verify=lambda v: (
+                        not self._verify_node_has_tag(
+                            v,
+                            self._resolve_uuid("note1"),
+                            "meeting",
+                        )
                     ),
                     warning="Use the UUID of your note",
                 ),
                 Step(
                     number=5,
                     concept="Tags can be renamed across your entire vault with "
-                            "`prism tag rename`. This updates all nodes at once.",
-                    command='prism tag rename work tasks',
+                    "`prism tag rename`. This updates all nodes at once.",
+                    command="prism tag rename work tasks",
                     verify=lambda v: self._verify_tag_renamed(v, "work", "tasks"),
                     warning="Try: prism tag rename work tasks",
                 ),
             ],
             summary="You can manage tags on any node at any time: add, remove, "
-                    "list, and rename. Tags are universal and help you organize "
-                    "your vault your way.",
+            "list, and rename. Tags are universal and help you organize "
+            "your vault your way.",
         )
 
         l8 = Lesson(
             number=8,
             title="Your vault is alive",
             concept="Prism watches for changes to your nodes. When you modify a note's "
-                    "body or fields, Prism detects it automatically.",
+            "body or fields, Prism detects it automatically.",
             steps=[
                 Step(
                     number=1,
                     concept="I've written a quick update to your note's body behind the scenes. "
-                            "Now run `prism status` to see what Prism noticed.",
+                    "Now run `prism status` to see what Prism noticed.",
                     command="prism status",
                     verify=self._verify_change_detected,
                     warning="Try: prism status",
@@ -926,15 +961,15 @@ class Tutor:
                 Step(
                     number=2,
                     concept="The vault detected the change. This is Prism's change tracking "
-                            "system at work — it notices when files are modified.",
+                    "system at work — it notices when files are modified.",
                     command="prism status",
                     verify=self._verify_always_true,
                     warning="Try: prism status",
                 ),
             ],
             summary="Your vault is alive! Prism automatically tracks changes to your "
-                    "nodes. You've learned the core workflows: create, link, query, "
-                    "import, track, and manage tags.",
+            "nodes. You've learned the core workflows: create, link, query, "
+            "import, track, and manage tags.",
         )
 
         return [l1, l2, l3, l4, l5, l6, l7, l8]

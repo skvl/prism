@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 import tomlkit
-
 from prism.vault.context import detect_vault
 from prism.vault.vault import Vault, generate_uuid, uuid_to_path
 
@@ -99,6 +98,7 @@ class TestVaultRegistry:
         reg_path = Path(tmp) / "vaults.toml"
         monkeypatch.setattr("prism.vault.registry.REGISTRY_PATH", reg_path)
         from prism.vault.registry import VaultRegistry
+
         return VaultRegistry()
 
     def test_add_and_list(self, registry):

@@ -4,7 +4,6 @@ import tempfile
 import uuid
 
 import pytest
-
 from prism.node.manager import NodeManager, resolve_uuid
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
@@ -386,7 +385,8 @@ class TestNodeManager:
     def test_get_body_info_no_blob_extension(self, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(
-            type_name="contact", title="No Body",
+            type_name="contact",
+            title="No Body",
             fields={"name": "X", "email": "x@x"},
         )
         result = manager.get_body_info(meta.uuid)
@@ -451,7 +451,8 @@ class TestNodeManager:
     def test_get_field_info_existing(self, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(
-            type_name="contact", title="Field Test",
+            type_name="contact",
+            title="Field Test",
             fields={"name": "Alice", "email": "a@b"},
         )
         schema, values = manager.get_field_info(meta.uuid)
@@ -473,7 +474,8 @@ class TestNodeManager:
     def test_update_node_fields_single(self, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(
-            type_name="contact", title="Single Update",
+            type_name="contact",
+            title="Single Update",
             fields={"name": "Old", "email": "o@o"},
         )
         assert manager.update_node_fields(meta.uuid, {"name": "New"}) is True
@@ -485,7 +487,8 @@ class TestNodeManager:
     def test_update_node_fields_multiple(self, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(
-            type_name="contact", title="Multi Update",
+            type_name="contact",
+            title="Multi Update",
             fields={"name": "A", "email": "a@a"},
         )
         assert manager.update_node_fields(meta.uuid, {"name": "B", "email": "b@b"}) is True
@@ -497,7 +500,8 @@ class TestNodeManager:
     def test_update_node_fields_empty_changes(self, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(
-            type_name="contact", title="Empty Update",
+            type_name="contact",
+            title="Empty Update",
             fields={"name": "X", "email": "x@x"},
         )
         assert manager.update_node_fields(meta.uuid, {}) is False

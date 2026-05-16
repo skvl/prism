@@ -8,7 +8,6 @@ from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.vault.vault import Vault
-
 from prism_cli import commands
 
 
@@ -18,6 +17,7 @@ def vault_dir():
     Vault.init(d)
     types_dir = os.path.join(d, ".metadata", "types")
     from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
+
     for fname, content in [
         ("note.toml", NOTE_TOML),
         ("contact.toml", CONTACT_TOML),
@@ -101,13 +101,17 @@ class TestCreateNode:
 
     def test_create_with_fields(self, vault):
         result = commands.create_node(
-            vault, "contact", "John", fields={"name": "John", "email": "j@test.com"},
+            vault,
+            "contact",
+            "John",
+            fields={"name": "John", "email": "j@test.com"},
         )
         assert result.ok
         assert result.data["meta"].fields.get("name") == "John"
 
     def test_create_with_add_path(self, vault):
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault.path)
         resolver.resolve_or_create("/test")
         result = commands.create_node(vault, "note", "Path Note", add_path="/test")
@@ -378,6 +382,7 @@ class TestManagePaths:
 class TestEditNode:
     def test_edit_add_path(self, vault):
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault.path)
         resolver.resolve_or_create("/test")
         manager = NodeManager(vault.path)
@@ -388,6 +393,7 @@ class TestEditNode:
 
     def test_edit_remove_path(self, vault):
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault.path)
         resolver.resolve_or_create("/test")
         manager = NodeManager(vault.path)
@@ -415,7 +421,8 @@ class TestEditNode:
     def test_edit_fields_info(self, vault):
         manager = NodeManager(vault.path)
         meta = manager.create_node(
-            type_name="contact", title="Field Edit",
+            type_name="contact",
+            title="Field Edit",
             fields={"name": "Old Name", "email": "old@test.com"},
         )
         result = commands.edit_node_fields(vault, meta.uuid)

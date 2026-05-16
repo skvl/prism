@@ -109,8 +109,7 @@ class NodeManager:
         """
         if type_name == "path":
             raise ValueError(
-                "Path nodes cannot be created via `prism new`. "
-                "Use `prism path create` instead."
+                "Path nodes cannot be created via `prism new`. Use `prism path create` instead."
             )
 
         schema = self.type_loader.load(type_name)
@@ -281,8 +280,7 @@ class NodeManager:
             backlinks = self._find_backlinks(uid)
             if backlinks:
                 raise ValueError(
-                    f"{len(backlinks)} node(s) link to this node. "
-                    "Use --yes to force deletion."
+                    f"{len(backlinks)} node(s) link to this node. Use --yes to force deletion."
                 )
 
         shutil.rmtree(storage_dir)
@@ -389,11 +387,13 @@ class NodeManager:
                         meta = NodeMetadata.from_toml(os.path.join(root, fname))
                         for link in meta.links:
                             if link.get("target") == uid:
-                                result.append({
-                                    "uuid": meta.uuid,
-                                    "title": meta.title,
-                                    "type": meta.type,
-                                })
+                                result.append(
+                                    {
+                                        "uuid": meta.uuid,
+                                        "title": meta.title,
+                                        "type": meta.type,
+                                    }
+                                )
                     except Exception:
                         continue
         return result

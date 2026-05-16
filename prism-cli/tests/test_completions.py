@@ -5,7 +5,6 @@ import tempfile
 import pytest
 from prism.node.manager import NodeManager
 from prism.vault.vault import Vault
-
 from prism_cli.completions import (
     complete_command,
     complete_type_name,
@@ -33,6 +32,7 @@ def vault_dir():
     Vault.init(d)
     types_dir = os.path.join(d, ".metadata", "types")
     from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
+
     for fname, content in [
         ("note.toml", NOTE_TOML),
         ("contact.toml", CONTACT_TOML),

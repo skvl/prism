@@ -25,6 +25,7 @@ class LinkExtractor:
 
     Supports both vault-internal links and cross-vault references.
     """
+
     @staticmethod
     def extract_links(body: str) -> list[dict[str, str]]:
         """Extract [[uuid]] links from a body string.
@@ -71,6 +72,7 @@ class LinkExtractor:
 
 class BacklinkIndex:
     """Builds and queries a reverse index of links targeting each node."""
+
     def __init__(self, vault_path: str) -> None:
         """Initialize the backlink index.
 
@@ -102,11 +104,13 @@ class BacklinkIndex:
                             if target:
                                 if target not in index:
                                     index[target] = []
-                                index[target].append({
-                                    "uuid": meta.uuid,
-                                    "title": meta.title,
-                                    "type": meta.type,
-                                })
+                                index[target].append(
+                                    {
+                                        "uuid": meta.uuid,
+                                        "title": meta.title,
+                                        "type": meta.type,
+                                    }
+                                )
                     except Exception:
                         continue
         return index
@@ -126,6 +130,7 @@ class BacklinkIndex:
 
 class GraphExporter:
     """Exports the node graph in DOT or JSON format."""
+
     def __init__(self, vault_path: str) -> None:
         """Initialize the graph exporter.
 
@@ -145,14 +150,14 @@ class GraphExporter:
             DOT graph string.
         """
         filtered = self._filter_nodes(nodes, include_paths)
-        lines = ['digraph Prism {', '  rankdir=LR;', '  node [shape=box, style=rounded];']
+        lines = ["digraph Prism {", "  rankdir=LR;", "  node [shape=box, style=rounded];"]
         for node in filtered:
             label = node.title or node.uuid[:8]
             lines.append(f'  "{node.uuid}" [label="{label}\\n({node.type})"];')
         for node in filtered:
             for link in node.links:
                 lines.append(f'  "{node.uuid}" -> "{link.get("target", "")}";')
-        lines.append('}')
+        lines.append("}")
         return "\n".join(lines)
 
     def export_json(self, nodes: list[NodeMetadata], include_paths: bool = False) -> str:
@@ -168,20 +173,24 @@ class GraphExporter:
         filtered = self._filter_nodes(nodes, include_paths)
         export_nodes: list[dict[str, Any]] = []
         for node in filtered:
-            export_nodes.append({
-                "uuid": node.uuid,
-                "title": node.title,
-                "type": node.type,
-                "tags": node.tags,
-            })
+            export_nodes.append(
+                {
+                    "uuid": node.uuid,
+                    "title": node.title,
+                    "type": node.type,
+                    "tags": node.tags,
+                }
+            )
 
         export_edges: list[dict[str, Any]] = []
         for node in filtered:
             for link in node.links:
-                export_edges.append({
-                    "source": node.uuid,
-                    "target": link.get("target", ""),
-                })
+                export_edges.append(
+                    {
+                        "source": node.uuid,
+                        "target": link.get("target", ""),
+                    }
+                )
 
         return json.dumps({"nodes": export_nodes, "edges": export_edges}, indent=2)
 

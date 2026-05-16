@@ -1,0 +1,102 @@
+repos:
+  - repo: local
+    hooks:
+      # ── ruff check (lint + fix) ──────────────────────────────────────
+      - id: ruff-check-prism-core
+        name: ruff check (prism-core)
+        language: system
+        entry: ruff
+        args: [check, --fix, --config, prism-core/pyproject.toml]
+        types: [python]
+        files: ^prism-core/
+        stages: [pre-commit]
+      - id: ruff-check-prism-cli
+        name: ruff check (prism-cli)
+        language: system
+        entry: ruff
+        args: [check, --fix, --config, prism-cli/pyproject.toml]
+        types: [python]
+        files: ^prism-cli/
+        stages: [pre-commit]
+
+      # ── ruff format ──────────────────────────────────────────────────
+      - id: ruff-format-prism-core
+        name: ruff format (prism-core)
+        language: system
+        entry: ruff
+        args: [format, --config, prism-core/pyproject.toml]
+        types: [python]
+        files: ^prism-core/
+        stages: [pre-commit]
+      - id: ruff-format-prism-cli
+        name: ruff format (prism-cli)
+        language: system
+        entry: ruff
+        args: [format, --config, prism-cli/pyproject.toml]
+        types: [python]
+        files: ^prism-cli/
+        stages: [pre-commit]
+
+      # ── pytest ───────────────────────────────────────────────────────
+      - id: pytest-prism-core
+        name: pytest (prism-core)
+        language: system
+        entry: pytest
+        args: [prism-core/tests/, -x, -q]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: pytest-prism-cli
+        name: pytest (prism-cli)
+        language: system
+        entry: pytest
+        args: [prism-cli/tests/, -x, -q]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      # ── pyright ──────────────────────────────────────────────────────
+      - id: pyright-prism-core
+        name: pyright (prism-core)
+        language: system
+        entry: pyright
+        args: [--project, prism-core/pyproject.toml]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: pyright-prism-cli
+        name: pyright (prism-cli)
+        language: system
+        entry: pyright
+        args: [--project, prism-cli/pyproject.toml]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      # ── bandit ───────────────────────────────────────────────────────
+      - id: bandit-prism-core
+        name: bandit (prism-core)
+        language: system
+        entry: bandit
+        args: [-c, prism-core/pyproject.toml]
+        files: ^prism-core/
+        stages: [pre-commit]
+      - id: bandit-prism-cli
+        name: bandit (prism-cli)
+        language: system
+        entry: bandit
+        args: [-c, prism-cli/pyproject.toml]
+        files: ^prism-cli/
+        stages: [pre-commit]
+
+      # ── pip-audit (project deps only) ───────────────────────────────
+      - id: pip-audit
+        name: pip-audit
+        language: system
+        entry: bash
+        args:
+          - -c
+          - pip-audit -r <(pip freeze 2>/dev/null | grep -iE '^(tomlkit|click|click-default-group|pytest|ruff|mypy|flake8|pylint|pyright|bandit|pip-audit)')
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

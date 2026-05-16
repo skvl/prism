@@ -43,6 +43,7 @@ def compute_storage_path(vault_path: str, uid: str) -> str:
         Full path to the node's storage directory.
     """
     import uuid
+
     return os.path.join(vault_path, ".storage", uuid_to_path(uuid.UUID(uid)))
 
 

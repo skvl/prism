@@ -41,24 +41,28 @@ class TestTypeSchema:
 
     def test_builtin_note_toml(self):
         import tomlkit
+
         doc = tomlkit.loads(NOTE_TOML)
         assert doc["name"] == "note"
         assert doc["body_model"] == "file(markdown)"
 
     def test_builtin_contact_toml(self):
         import tomlkit
+
         doc = tomlkit.loads(CONTACT_TOML)
         assert doc["name"] == "contact"
         assert doc["body_model"] == "null"
 
     def test_builtin_bookmark_toml(self):
         import tomlkit
+
         doc = tomlkit.loads(BOOKMARK_TOML)
         assert doc["name"] == "bookmark"
         assert doc["body_model"] == "null"
 
     def test_builtin_file_toml(self):
         import tomlkit
+
         doc = tomlkit.loads(FILE_TOML)
         assert doc["name"] == "file"
         assert doc["body_model"] == "file(binary)"

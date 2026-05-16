@@ -3,6 +3,7 @@
 Wraps CLI commands in an interactive shell with command dispatch,
 UUID shorthand (`_`), tab completion, and history persistence.
 """
+
 import os
 import readline
 import subprocess
@@ -43,7 +44,8 @@ class Repl:
     """
 
     def __init__(
-        self, vault: Optional[Vault] = None,
+        self,
+        vault: Optional[Vault] = None,
         input_stream: Optional[TextIO] = None,
         output_stream: Optional[TextIO] = None,
     ) -> None:
@@ -145,8 +147,7 @@ class Repl:
 
         if cmd in UNSUPPORTED_IN_REPL:
             self._p(
-                f"The {cmd} command cannot run inside the REPL. "
-                f"Run `prism {cmd}` from your shell."
+                f"The {cmd} command cannot run inside the REPL. Run `prism {cmd}` from your shell."
             )
             return False
 
@@ -247,7 +248,9 @@ class Repl:
 
         assert self.vault is not None
         result = commands.create_node(
-            self.vault, type_name, title,
+            self.vault,
+            type_name,
+            title,
             fields=extra_fields,  # type: ignore[arg-type]
             tags=tags if tags else None,
             add_path=add_path,
@@ -296,8 +299,10 @@ class Repl:
 
         if add_path is not None or remove_path is not None:
             result = commands.edit_node(
-                self.vault, uuid_arg,
-                add_path=add_path, remove_path=remove_path,
+                self.vault,
+                uuid_arg,
+                add_path=add_path,
+                remove_path=remove_path,
             )
             if result.ok:
                 action = result.data.get("action", "")
@@ -327,7 +332,11 @@ class Repl:
             new_size = os.stat(body_path).st_size
             new_sha256 = sha256_file(body_path)
             result = commands.commit_body_edit(
-                self.vault, uuid_arg, new_mtime, new_size, new_sha256,
+                self.vault,
+                uuid_arg,
+                new_mtime,
+                new_size,
+                new_sha256,
             )
             if result.ok:
                 self._p("Body updated.")
@@ -415,7 +424,7 @@ class Repl:
                 for i, child in enumerate(children):
                     _render(child, child_prefix, i == len(children) - 1)
 
-            suffix = f" ({tree_data['ref_count']} nodes)" if tree_data['ref_count'] > 0 else ""
+            suffix = f" ({tree_data['ref_count']} nodes)" if tree_data["ref_count"] > 0 else ""
             self._p(f"{tree_data['name']}{suffix}")
             for i, child in enumerate(tree_data.get("children", [])):
                 _render(child, "", i == len(tree_data["children"]) - 1)
@@ -616,6 +625,7 @@ class Repl:
             resp = inp.readline().strip().lower()
             if resp == "y":
                 from prism.tracking import ChangeTracker
+
                 tracker = ChangeTracker(self.vault.path)
                 tracker.re_extract_links(node["uuid"])
 
@@ -742,7 +752,10 @@ class Repl:
             line = readline.get_line_buffer()
             parts = line.split()
             self._completion_matches = completions.resolve_completions(
-                parts, text, self.vault, ALIASES,
+                parts,
+                text,
+                self.vault,
+                ALIASES,
             )
         try:
             return self._completion_matches[state]

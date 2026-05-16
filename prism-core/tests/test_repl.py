@@ -3,10 +3,9 @@ import shutil
 import tempfile
 
 import pytest
+from prism.vault.vault import Vault
 from prism_cli import commands, completions
 from prism_cli.repl import ALIASES, Repl
-
-from prism.vault.vault import Vault
 
 
 class TestReplDegradedMode:
@@ -113,6 +112,7 @@ class TestReplFullMode:
 
     def test_history_does_not_raise(self, repl):
         import readline
+
         readline.add_history("test command")
         repl._handle_line("history")
 

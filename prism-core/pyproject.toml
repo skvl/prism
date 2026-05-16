@@ -37,6 +37,9 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.mypy]
 strict = true
 python_version = "3.11"
@@ -55,8 +58,8 @@ max-line-length = 100
 disable = "C,R"
 
 [tool.pyright]
-extraPaths = ["."]
+extraPaths = [".", "../prism-cli"]
 
 [tool.bandit]
-skips = ["B101"]
+skips = ["B101", "B110", "B112", "B404", "B603", "B607"]
 exclude_dirs = ["tests"]

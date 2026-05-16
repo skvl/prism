@@ -5,7 +5,6 @@ import uuid
 
 import pytest
 import tomlkit
-
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.path.resolver import PathResolver
