@@ -31,6 +31,22 @@ class TestChangeTracker:
         assert "new_files" in status
         assert "orphaned" in status
 
+    def test_status_with_description_change(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(
+            type_name="note", title="Desc Change", description="Original desc"
+        )
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        meta_obj = NodeMetadata.from_toml(meta_path)
+        meta_obj.desc_mtime = "0"
+        meta_obj.save(meta_path)
+        tracker = ChangeTracker(vault_dir)
+        status = tracker.status()
+        changed = [n for n in status["changed"] if "description" in n.get("change_type", "")]
+        assert len(changed) > 0
+        assert changed[0]["uuid"] == meta.uuid
+
     def test_status_with_modified_blob(self, vault_dir):
         manager = NodeManager(vault_dir)
         nodes = [n for n in manager.list_nodes() if n.type != "path"]
@@ -99,7 +115,7 @@ class TestChangeTracker:
         meta = manager.create_node(type_name="contact", fields={"name": "No Blob"})
         tracker = ChangeTracker(vault_dir)
         result = tracker.re_extract_links(meta.uuid)
-        assert result is False
+        assert result is True
 
     def test_re_extract_links_missing_body(self, vault_dir):
         manager = NodeManager(vault_dir)
@@ -108,7 +124,7 @@ class TestChangeTracker:
         os.unlink(os.path.join(storage_dir, "data.md"))
         tracker = ChangeTracker(vault_dir)
         result = tracker.re_extract_links(meta.uuid)
-        assert result is False
+        assert result is True
 
     def test_update_blob_info_no_blob(self, vault_dir):
         manager = NodeManager(vault_dir)

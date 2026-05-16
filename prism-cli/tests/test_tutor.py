@@ -266,6 +266,34 @@ class TestVerifyTagRenamed:
         assert tutor._verify_tag_renamed(vault, "work", "tasks") is False
 
 
+# ── Verify Description ──────────────────────────────────────────────────
+
+
+class TestVerifyDescription:
+    def test_description_present(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(
+            type_name="note", title="Has Desc", description="A meaningful summary"
+        )
+        tutor = Tutor()
+        tutor.vault = vault
+        assert tutor._verify_description(vault, meta.uuid, "A meaningful summary") is True
+
+    def test_description_absent(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="No Desc")
+        tutor = Tutor()
+        tutor.vault = vault
+        assert tutor._verify_description(vault, meta.uuid, "anything") is False
+
+    def test_description_wrong_content(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Wrong Desc", description="Wrong text")
+        tutor = Tutor()
+        tutor.vault = vault
+        assert tutor._verify_description(vault, meta.uuid, "Expected text") is False
+
+
 # ── Verify Always True ─────────────────────────────────────────────────
 
 

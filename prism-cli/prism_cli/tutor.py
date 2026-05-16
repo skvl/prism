@@ -443,6 +443,25 @@ class Tutor:
         tags_dict = manager.list_tags()
         return old_tag not in tags_dict and new_tag in tags_dict
 
+    def _verify_description(self, vault: Vault, uuid: str, expected_text: str) -> bool:
+        """Verify a node has a description containing the expected text.
+
+        Args:
+            vault: The vault to check.
+            uuid: Full UUID of the node.
+            expected_text: Text expected to be in the description.
+
+        Returns:
+            True if the description exists and contains the expected text.
+        """
+        from prism.node.manager import NodeManager
+
+        manager = NodeManager(vault.path)
+        desc = manager.get_description(uuid)
+        if desc is None:
+            return False
+        return expected_text in desc
+
     def _verify_always_true(self, _vault: Vault) -> bool:
         """A verification that always passes (for display-only steps)."""
         return True
@@ -719,9 +738,23 @@ class Tutor:
                     ),
                     warning="Try: prism query tag:ideas",
                 ),
+                Step(
+                    number=4,
+                    concept="Nodes can have an optional description — a brief summary "
+                    "that's separate from the body. Use `--desc` with `prism edit` "
+                    "to add one.",
+                    command='prism edit {note1} --desc "A brief summary of my first note"',
+                    verify=lambda v: self._verify_description(
+                        v,
+                        self._resolve_uuid("note1"),
+                        "A brief summary of my first note",
+                    ),
+                    warning='Try: prism edit <uuid> --desc "A brief summary of my first note"',
+                ),
             ],
             summary="You created a note, viewed its details, and found it with a tag query. "
-            "Every node in Prism works the same way.",
+            "Every node in Prism works the same way. Descriptions let you add "
+            "a quick summary alongside any node.",
         )
 
         l3 = Lesson(

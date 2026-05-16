@@ -194,11 +194,23 @@ def resolve_completions(
     if text.startswith("path:"):
         return complete_path(vault, text)
 
+    if text.startswith("--"):
+        flags: list[str] = []
+        if cmd == "new":
+            flags = ["--desc", "--tag", "-t", "--add-path", "-a"]
+        elif cmd == "edit":
+            flags = ["--desc", "--add-path", "-a", "--remove-path", "-r"]
+        elif cmd == "show":
+            flags = ["--desc"]
+        return [f for f in flags if f.startswith(text)]
+
     for i, part in enumerate(parts):
         if part in ("--tag", "-t") and i + 1 >= len(parts):
             return complete_tag(vault, text)
         if part in ("--add-path", "-a", "--remove-path", "-r") and i + 1 >= len(parts):
             return complete_path(vault, text)
+        if part == "--desc" and i + 1 >= len(parts):
+            return []
 
     if cmd == "new" and len(parts) <= 2 and text:
         return complete_type_name(vault, text)

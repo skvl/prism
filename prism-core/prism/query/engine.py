@@ -111,20 +111,26 @@ class QueryEngine:
         for val in node.fields.values():
             if isinstance(val, str) and text in val.lower():
                 return True
+        storage_dir = compute_storage_path(self.vault_path, node.uuid)
+        search_paths: list[str] = []
         if node.blob_extension == "md":
-            storage_dir = compute_storage_path(self.vault_path, node.uuid)
             body_path = os.path.join(storage_dir, f"data.{node.blob_extension}")
             if os.path.exists(body_path):
-                try:
-                    result = subprocess.run(
-                        ["grep", "-l", text, body_path],
-                        capture_output=True,
-                        text=True,
-                    )
-                    if result.returncode == 0:
+                search_paths.append(body_path)
+        desc_path = os.path.join(storage_dir, "description.md")
+        if os.path.exists(desc_path):
+            search_paths.append(desc_path)
+        for path in search_paths:
+            try:
+                result = subprocess.run(
+                    ["grep", "-l", text, path],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return True
+            except Exception:
+                with open(path) as f:
+                    if text in f.read().lower():
                         return True
-                except Exception:
-                    with open(body_path) as f:
-                        if text in f.read().lower():
-                            return True
         return False

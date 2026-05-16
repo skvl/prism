@@ -53,19 +53,42 @@ class ChangeTracker:
                             meta = NodeMetadata.from_toml(os.path.join(root, fname))
                             fs_uids.add(meta.uuid)
 
+                            body_changed = False
+                            desc_changed = False
+
                             if meta.blob_mtime:
                                 ext = meta.blob_extension
                                 body_path = os.path.join(root, f"data.{ext}") if ext else None
                                 if body_path and os.path.exists(body_path):
                                     current_mtime = str(os.stat(body_path).st_mtime)
                                     if current_mtime != meta.blob_mtime:
-                                        changed_nodes.append(
-                                            {
-                                                "uuid": meta.uuid,
-                                                "title": meta.title,
-                                                "type": meta.type,
-                                            }
-                                        )
+                                        body_changed = True
+
+                            if meta.desc_mtime:
+                                desc_path = os.path.join(root, "description.md")
+                                if os.path.exists(desc_path):
+                                    current_mtime = str(os.stat(desc_path).st_mtime)
+                                    if current_mtime != meta.desc_mtime:
+                                        desc_changed = True
+                            else:
+                                desc_path = os.path.join(root, "description.md")
+                                if os.path.exists(desc_path):
+                                    desc_changed = True
+
+                            if body_changed or desc_changed:
+                                change_types: list[str] = []
+                                if body_changed:
+                                    change_types.append("body")
+                                if desc_changed:
+                                    change_types.append("description")
+                                changed_nodes.append(
+                                    {
+                                        "uuid": meta.uuid,
+                                        "title": meta.title,
+                                        "type": meta.type,
+                                        "change_type": ",".join(change_types),
+                                    }
+                                )
                         except Exception:
                             continue
 
@@ -104,13 +127,13 @@ class ChangeTracker:
         meta.save(meta_path)
 
     def re_extract_links(self, uid: str) -> bool:
-        """Re-extract [[uuid]] links from a node's body.
+        """Re-extract [[uuid]] links from a node's body and description.
 
         Args:
             uid: UUID of the node.
 
         Returns:
-            True if links were re-extracted, False if no body exists.
+            True if links were re-extracted, False if no content exists.
         """
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
@@ -118,14 +141,18 @@ class ChangeTracker:
             return False
 
         meta = NodeMetadata.from_toml(meta_path)
-        if not meta.blob_extension:
-            return False
 
-        body_path = os.path.join(storage_dir, f"data.{meta.blob_extension}")
-        if not os.path.exists(body_path):
-            return False
+        new_links: list[dict[str, str]] = []
 
-        new_links = LinkExtractor.extract_from_file(body_path)
+        if meta.blob_extension:
+            body_path = os.path.join(storage_dir, f"data.{meta.blob_extension}")
+            if os.path.exists(body_path):
+                new_links.extend(LinkExtractor.extract_from_file(body_path))
+
+        desc_path = NodeMetadata.description_path(storage_dir)
+        if os.path.exists(desc_path):
+            new_links.extend(LinkExtractor.extract_from_file(desc_path))
+
         meta.links = new_links
         meta.updated_at = datetime.now(timezone.utc).isoformat()
         meta.sync_dirty = True

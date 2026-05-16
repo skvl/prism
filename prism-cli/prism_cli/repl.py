@@ -216,8 +216,9 @@ class Repl:
     def _cmd_new(self, args: list[str]) -> None:
         if not args:
             self._p(
-                "Usage: new <type> [title] [--tag <tag> ...] "
-                "[--add-path <path>] [--field=value ...]"
+                "Usage: new <type> [title] "
+                "[--tag <tag> ...] "
+                "[--add-path <path>] [--desc <text>] [--field=value ...]"
             )
             return
 
@@ -225,6 +226,7 @@ class Repl:
         title = ""
         tags: list[str] = []
         add_path: Optional[str] = None
+        description: Optional[str] = None
         extra: list[str] = []
         i = 1
         while i < len(args):
@@ -233,6 +235,9 @@ class Repl:
                 i += 2
             elif args[i] in ("--add-path", "-a") and i + 1 < len(args):
                 add_path = args[i + 1]
+                i += 2
+            elif args[i] == "--desc" and i + 1 < len(args):
+                description = args[i + 1]
                 i += 2
             elif args[i].startswith("--") and "=" in args[i]:
                 extra.append(args[i])
@@ -254,6 +259,7 @@ class Repl:
             fields=extra_fields,  # type: ignore[arg-type]
             tags=tags if tags else None,
             add_path=add_path,
+            description=description,
         )
         if result.ok:
             meta = result.data["meta"]
@@ -268,10 +274,17 @@ class Repl:
 
     def _cmd_show(self, args: list[str]) -> None:
         if not args:
-            self._p("Usage: show <uuid>")
+            self._p("Usage: show <uuid> [--desc]")
             return
         assert self.vault is not None
-        result = commands.show_node(self.vault, args[0])
+        show_desc = "--desc" in args
+        uuid_arg = (
+            args[0] if not show_desc or args[0] != "--desc" else args[1] if len(args) > 1 else ""
+        )
+        if not uuid_arg:
+            self._p("Usage: show <uuid> [--desc]")
+            return
+        result = commands.show_node(self.vault, uuid_arg, show_description=show_desc)
         if result.ok:
             self._p(result.data["output"])
         else:
@@ -279,13 +292,14 @@ class Repl:
 
     def _cmd_edit(self, args: list[str]) -> None:
         if not args:
-            self._p("Usage: edit <uuid> [--add-path <path>] [--remove-path <path>]")
+            self._p("Usage: edit <uuid> [--add-path <path>] [--remove-path <path>] [--desc <text>]")
             return
         assert self.vault is not None
 
         uuid_arg = args[0]
         add_path: Optional[str] = None
         remove_path: Optional[str] = None
+        description: Optional[str] = None
         i = 1
         while i < len(args):
             if args[i] in ("--add-path", "-a") and i + 1 < len(args):
@@ -294,8 +308,24 @@ class Repl:
             elif args[i] in ("--remove-path", "-r") and i + 1 < len(args):
                 remove_path = args[i + 1]
                 i += 2
+            elif args[i] == "--desc" and i + 1 < len(args):
+                description = args[i + 1]
+                i += 2
             else:
                 i += 1
+
+        if description is not None:
+            result = commands.set_node_description(self.vault, uuid_arg, description)
+            if result.ok:
+                action = result.data.get("action", "")
+                if action == "set":
+                    self._p("Description updated.")
+                else:
+                    self._p("Description cleared.")
+                self.last_uuid = uuid_arg
+            else:
+                self._p(f"Error: {result.error}")
+            return
 
         if add_path is not None or remove_path is not None:
             result = commands.edit_node(
@@ -665,8 +695,15 @@ class Repl:
         result = commands.verify_node(self.vault, args[0])
         if result.ok:
             self._p("OK")
-        else:
+        elif result.code == "NOT_FOUND":
             self._p(result.error)
+            return
+        else:
+            self._p("CORRUPTED")
+
+        desc = result.data.get("description", "")
+        if desc:
+            self._p(f"Description: {desc}")
 
     def _cmd_help(self, args: list[str]) -> None:
         if args:
@@ -678,12 +715,12 @@ class Repl:
                 "open": "Open an existing vault.",
                 "new": (
                     "Create a new typed node. Usage: new <type> [title] "
-                    "[--tag <tag> ...] [--add-path <path>]"
+                    "[--tag <tag> ...] [--add-path <path>] [--desc <text>]"
                 ),
-                "show": "Display node details. Usage: show <uuid>",
+                "show": "Display node details. Usage: show <uuid> [--desc]",
                 "edit": (
                     "Edit a node's body or fields. Usage: edit <uuid> "
-                    "[--add-path <path>] [--remove-path <path>]"
+                    "[--add-path <path>] [--remove-path <path>] [--desc <text>]"
                 ),
                 "rm": "Delete a node. Usage: rm <uuid>",
                 "query": "Search nodes. Usage: query <query>",

@@ -9,6 +9,7 @@ import os
 import shutil
 from typing import Optional
 
+from prism.node.metadata import NodeMetadata
 from prism.vault.vault import uuid_to_path
 
 
@@ -125,6 +126,63 @@ class StorageEngine:
                 return os.path.join(storage_dir, fname)
         return None
 
+    def write_description(self, uid: str, content: str) -> tuple[str, str, int]:
+        """Write or update description.md for a node.
+
+        Args:
+            uid: UUID of the node.
+            content: Description text (empty string deletes the file).
+
+        Returns:
+            Tuple of (sha256, mtime_str, size).
+        """
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+
+        if not content:
+            if os.path.exists(desc_path):
+                os.remove(desc_path)
+            return ("", "", 0)
+
+        os.makedirs(storage_dir, exist_ok=True)
+        with open(desc_path, "w") as f:
+            f.write(content)
+        stat_info = os.stat(desc_path)
+        sha256 = sha256_file(desc_path)
+        return (sha256, str(stat_info.st_mtime), stat_info.st_size)
+
+    def read_description(self, uid: str) -> Optional[str]:
+        """Read the description.md content for a node.
+
+        Args:
+            uid: UUID of the node.
+
+        Returns:
+            Description text, or None if not found.
+        """
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+        if not os.path.exists(desc_path):
+            return None
+        with open(desc_path) as f:
+            return f.read()
+
+    def delete_description(self, uid: str) -> bool:
+        """Delete description.md for a node.
+
+        Args:
+            uid: UUID of the node.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+        if os.path.exists(desc_path):
+            os.remove(desc_path)
+            return True
+        return False
+
     def verify_integrity(self, uid: str, expected_hash: str) -> bool:
         """Verify a blob's SHA-256 hash matches the expected value.
 
@@ -139,4 +197,23 @@ class StorageEngine:
         if blob_path is None:
             return False
         actual = sha256_file(blob_path)
+        return actual == expected_hash
+
+    def verify_description_integrity(self, uid: str, expected_hash: str) -> bool:
+        """Verify a description's SHA-256 hash matches the expected value.
+
+        Args:
+            uid: UUID of the node.
+            expected_hash: Expected SHA-256 digest.
+
+        Returns:
+            True if hash matches or no description, False otherwise.
+        """
+        if not expected_hash:
+            return True
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+        if not os.path.exists(desc_path):
+            return False
+        actual = sha256_file(desc_path)
         return actual == expected_hash

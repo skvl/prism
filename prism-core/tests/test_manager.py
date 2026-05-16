@@ -150,6 +150,90 @@ class TestNodeManager:
             content = f.read()
         assert meta.uuid in content
 
+    def test_create_node_with_description(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(
+            type_name="note", title="Described", description="A brief summary"
+        )
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+        assert os.path.exists(desc_path)
+        with open(desc_path) as f:
+            assert f.read() == "A brief summary"
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.desc_sha256
+        assert meta2.desc_mtime
+        assert meta2.desc_size > 0
+
+    def test_set_description_on_node_without_one(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="No Desc")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+        assert not os.path.exists(desc_path)
+        meta_obj = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta_obj.desc_sha256 == ""
+        manager.set_description(meta.uuid, "New description")
+        assert os.path.exists(desc_path)
+        with open(desc_path) as f:
+            assert f.read() == "New description"
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.desc_sha256
+        assert meta2.desc_mtime
+        assert meta2.desc_size > 0
+
+    def test_update_existing_description(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Updatable", description="Original")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        manager.set_description(meta.uuid, "Updated description")
+        desc_path = NodeMetadata.description_path(storage_dir)
+        with open(desc_path) as f:
+            assert f.read() == "Updated description"
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.desc_sha256
+        assert meta2.desc_size > 0
+
+    def test_clear_description(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Clearable", description="To be cleared")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+        assert os.path.exists(desc_path)
+        manager.set_description(meta.uuid, "")
+        assert not os.path.exists(desc_path)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.desc_sha256 == ""
+        assert meta2.desc_size == 0
+
+    def test_delete_node_with_description(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(
+            type_name="note", title="Delete Desc", description="Will be deleted"
+        )
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        assert os.path.exists(NodeMetadata.description_path(storage_dir))
+        manager.delete_node(meta.uuid, force=True)
+        assert not os.path.exists(storage_dir)
+
+    def test_description_link_extraction(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Link Desc")
+        target_uuid = "aaaaaaaa-0000-0000-0000-000000000000"
+        manager.set_description(meta.uuid, f"See [[{target_uuid}]] for details")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert len(meta2.links) == 1
+        assert meta2.links[0]["target"] == target_uuid
+
+    def test_description_without_links(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="No Link Desc")
+        manager.set_description(meta.uuid, "Plain text without any links")
+        storage_dir = compute_storage_path(vault_dir, meta.uuid)
+        meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        assert meta2.links == []
+
     def test_delete_node_force(self, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="To Delete")

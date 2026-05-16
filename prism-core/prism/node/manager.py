@@ -91,6 +91,7 @@ class NodeManager:
         fields: Optional[dict[str, Any]] = None,
         blob_path: Optional[str] = None,
         tags: Optional[list[str]] = None,
+        description: Optional[str] = None,
     ) -> NodeMetadata:
         """Create a new node of the given type.
 
@@ -100,6 +101,7 @@ class NodeManager:
             fields: Optional field values.
             blob_path: Optional path to a file to import as blob.
             tags: Optional list of tags.
+            description: Optional description text (written to description.md).
 
         Returns:
             The newly created NodeMetadata.
@@ -163,6 +165,12 @@ class NodeManager:
             meta.blob_size = stat_info.st_size
             meta.blob_sha256 = sha256_file(body_path)
 
+        if description is not None:
+            sha256_val, mtime_val, size_val = self.storage.write_description(uid, description)
+            meta.desc_sha256 = sha256_val
+            meta.desc_mtime = mtime_val
+            meta.desc_size = size_val
+
         meta_path = NodeMetadata.metadata_path(storage_dir)
         meta.save(meta_path)
 
@@ -198,8 +206,6 @@ class NodeManager:
             size: New file size.
             sha256: New SHA-256 hash.
         """
-        from prism.graph.links import LinkExtractor
-
         uid = self._resolve_uuid(uid)
         storage_dir = compute_storage_path(self.vault_path, uid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
@@ -210,9 +216,42 @@ class NodeManager:
         meta.updated_at = datetime.now(timezone.utc).isoformat()
         meta.sync_dirty = True
         if meta.blob_extension == "md":
+            from prism.graph.links import LinkExtractor
+
             body_path = os.path.join(storage_dir, f"data.{meta.blob_extension}")
             if os.path.exists(body_path):
                 meta.links = LinkExtractor.extract_from_file(body_path)
+        meta.save(meta_path)
+
+    def set_description(self, uid: str, description: str) -> None:
+        """Set, update, or clear a node's description.
+
+        Creates or updates description.md if description is non-empty;
+        deletes it and clears tracking fields if description is empty.
+
+        Args:
+            uid: UUID of the node (full or partial).
+            description: Description text (empty string clears).
+        """
+        uid = self._resolve_uuid(uid)
+        storage_dir = compute_storage_path(self.vault_path, uid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        meta = NodeMetadata.from_toml(meta_path)
+
+        sha256_val, mtime_val, size_val = self.storage.write_description(uid, description)
+
+        meta.desc_sha256 = sha256_val
+        meta.desc_mtime = mtime_val
+        meta.desc_size = size_val
+        meta.updated_at = datetime.now(timezone.utc).isoformat()
+        meta.sync_dirty = True
+
+        if description:
+            from prism.graph.links import LinkExtractor
+
+            desc_path = NodeMetadata.description_path(storage_dir)
+            meta.links = LinkExtractor.extract_from_file(desc_path)
+
         meta.save(meta_path)
 
     def get_field_info(self, uid: str) -> tuple[TypeSchema, dict[str, Any]]:
@@ -287,11 +326,12 @@ class NodeManager:
         self._index_remove(uid)
         return True
 
-    def show_node(self, uid: str) -> Optional[str]:
+    def show_node(self, uid: str, show_description: bool = False) -> Optional[str]:
         """Get a formatted display string for a node.
 
         Args:
             uid: UUID of the node (full or partial).
+            show_description: Whether to include the description section.
 
         Returns:
             Formatted string or None if not found.
@@ -330,6 +370,12 @@ class NodeManager:
         lines.append(f"Created: {meta.created_at}")
         lines.append(f"Updated: {meta.updated_at}")
 
+        if show_description and self._has_description(storage_dir):
+            desc_path = NodeMetadata.description_path(storage_dir)
+            with open(desc_path) as f:
+                desc_text = f.read()
+            lines.append(f"\nDescription:\n{desc_text}")
+
         if meta.blob_extension:
             body_path = os.path.join(storage_dir, f"data.{meta.blob_extension}")
             if os.path.exists(body_path) and meta.blob_extension == "md":
@@ -339,6 +385,11 @@ class NodeManager:
                 lines.append(f"\nBody (first 20 lines):\n{preview}")
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _has_description(storage_dir: str) -> bool:
+        desc_path = NodeMetadata.description_path(storage_dir)
+        return os.path.exists(desc_path)
 
     def _index_add(self, uid: str) -> None:
         with open(self.index_path, "a") as f:
@@ -397,6 +448,18 @@ class NodeManager:
                     except Exception:
                         continue
         return result
+
+    def get_description(self, uid: str) -> Optional[str]:
+        """Get the description text for a node.
+
+        Args:
+            uid: UUID of the node (full or partial).
+
+        Returns:
+            Description text, or None if the node has no description.
+        """
+        uid = self._resolve_uuid(uid)
+        return self.storage.read_description(uid)
 
     def list_nodes(self) -> list[NodeMetadata]:
         """List all nodes in the vault.

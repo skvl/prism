@@ -36,15 +36,23 @@ The system SHALL support filtering by node type.
 
 ### Requirement: Full-text search
 
-The system SHALL support basic text search over note bodies.
+The system SHALL support basic text search over note bodies and node descriptions.
 
 #### Scenario: Search note body
 - **WHEN** user runs `prism query "budget report"`
 - **THEN** the system SHALL search for "budget" and "report" in note body text (grep-based)
 
+#### Scenario: Search description text
+- **WHEN** user runs `prism query "vacation"`
+- **THEN** the system SHALL search for "vacation" in both `data.md` and `description.md` files
+
+#### Scenario: Description-only match
+- **WHEN** user runs `prism query "project roadmap"` and a node has "project roadmap" in its description but not its body
+- **THEN** the system SHALL include that node in the results
+
 #### Scenario: Search with tag and text
 - **WHEN** user runs `prism query "meeting AND tag:q2"`
-- **THEN** the system SHALL return nodes tagged "q2" whose bodies mention "meeting"
+- **THEN** the system SHALL return nodes tagged "q2" whose bodies or descriptions mention "meeting"
 
 ### Requirement: Output formatting
 

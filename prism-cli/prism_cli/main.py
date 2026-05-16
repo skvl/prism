@@ -342,6 +342,7 @@ def add_file(ctx: click.Context, source_path: str, type_name: Optional[str]) -> 
 @click.argument("title", default="")
 @click.option("--tag", "-t", "tags", multiple=True, help="Tags to add")
 @click.option("--add-path", "-a", "add_path", default=None, help="Associate node with a path")
+@click.option("--desc", default=None, help="Description text for the node")
 @click.pass_context
 def new(
     ctx: click.Context,
@@ -349,6 +350,7 @@ def new(
     title: str,
     tags: tuple[str, ...],
     add_path: Optional[str],
+    desc: Optional[str],
 ) -> None:
     """Create a new typed node."""
     vault: Optional[Vault] = ctx.obj.get("vault")
@@ -377,6 +379,7 @@ def new(
         fields=explicit_fields,
         tags=list(tags) if tags else None,
         add_path=add_path,
+        description=desc,
     )
     if result.ok:
         meta = result.data["meta"]
@@ -422,12 +425,16 @@ def _do_edit_path_ops(
 @click.argument("uuid")
 @click.option("--add-path", "-a", "add_path", default=None, help="Associate node with a path")
 @click.option("--remove-path", "-r", "remove_path", default=None, help="Remove node from a path")
+@click.option(
+    "--desc", default=None, help="Set, update, or clear description (empty string clears)"
+)
 @click.pass_context
 def edit(
     ctx: click.Context,
     uuid: str,
     add_path: Optional[str],
     remove_path: Optional[str],
+    desc: Optional[str],
 ) -> None:
     """Edit a node's body or fields."""
     vault: Optional[Vault] = ctx.obj.get("vault")
@@ -439,6 +446,18 @@ def edit(
         full_uuid = resolve_uuid(vault.path, uuid)
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if desc is not None:
+        result = commands.set_node_description(vault, full_uuid, desc)
+        if result.ok:
+            action = result.data.get("action", "")
+            if action == "set":
+                click.echo("Description updated.")
+            elif action == "cleared":
+                click.echo("Description cleared.")
+            return
+        click.echo(f"Error: {result.error}", err=True)
         sys.exit(1)
 
     if _do_edit_path_ops(vault, full_uuid, add_path, remove_path):
@@ -524,20 +543,66 @@ def rm(ctx: click.Context, uuid: str, yes: bool) -> None:
 
 @cli.command()
 @click.argument("uuid")
+@click.option(
+    "--desc", "--description", is_flag=True, default=False, help="Show description section"
+)
 @click.pass_context
-def show(ctx: click.Context, uuid: str) -> None:
+def show(ctx: click.Context, uuid: str, desc: bool) -> None:
     """Display a node's details."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
         click.echo("No vault found. Run `prism init` to create one.", err=True)
         sys.exit(1)
 
-    result = commands.show_node(vault, uuid)
+    result = commands.show_node(vault, uuid, show_description=desc)
     if result.ok:
         click.echo(result.data["output"])
     else:
         click.echo(result.error, err=True)
         sys.exit(1)
+
+
+@cli.command()
+@click.option(
+    "--desc", "--description", is_flag=True, default=False, help="Show description preview"
+)
+@click.pass_context
+def list_nodes(ctx: click.Context, desc: bool) -> None:
+    """List all nodes in the vault."""
+    vault: Optional[Vault] = ctx.obj.get("vault")
+    if vault is None:
+        click.echo("No vault found. Run `prism init` to create one.", err=True)
+        sys.exit(1)
+
+    result = commands.list_nodes(vault, show_desc=desc)
+    if not result.ok:
+        click.echo(f"Error: {result.error}", err=True)
+        sys.exit(1)
+
+    nodes = result.data.get("nodes", [])
+    if not nodes:
+        click.echo("No nodes found.")
+        return
+
+    output_format = ctx.obj.get("format", "table")
+    if output_format == "json":
+        click.echo(json.dumps(nodes, indent=2))
+        return
+
+    if desc:
+        click.echo(f"{'UUID':<12} {'Type':<12} {'Title':<30} {'Description':<30}")
+        click.echo("-" * 84)
+        for n in nodes:
+            desc_preview = (n.get("description", "") or "")[:30]
+            click.echo(
+                f"{n['uuid'][:12]:<12} {n['type']:<12} {n['title'][:30]:<30} {desc_preview:<30}"
+            )
+    else:
+        click.echo(f"{'UUID':<12} {'Type':<12} {'Title':<30} {'Tags':<20}")
+        click.echo("-" * 74)
+        for n in nodes:
+            tags = ", ".join(n.get("tags", []))[:20]
+            click.echo(f"{n['uuid'][:12]:<12} {n['type']:<12} {n['title'][:30]:<30} {tags:<20}")
 
 
 @cli.command()
@@ -688,7 +753,9 @@ def status(ctx: click.Context) -> None:
     if changed:
         click.echo("Changed nodes:")
         for node in changed:
-            click.echo(f"  {node['uuid'][:8]} {node.get('title', '?')}")
+            change_type = node.get("change_type", "body")
+            label = f"[{change_type}]" if change_type else ""
+            click.echo(f"  {node['uuid'][:8]} {node.get('title', '?')} {label}")
 
     if new_files:
         click.echo("New files detected:")
@@ -729,8 +796,17 @@ def verify(ctx: click.Context, uuid: str) -> None:
     result = commands.verify_node(vault, uuid)
     if result.ok:
         click.echo("OK")
-    else:
+    elif result.code == "NOT_FOUND":
         click.echo(f"Error: {result.error}", err=True)
+        sys.exit(1)
+    else:
+        click.echo("CORRUPTED", err=True)
+
+    desc = result.data.get("description", "")
+    if desc:
+        click.echo(f"Description: {desc}")
+
+    if not result.ok:
         sys.exit(1)
 
 

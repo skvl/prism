@@ -23,6 +23,15 @@ prism init ~/my-vault
 # Create a note
 prism new note "Meeting Notes" --tag work
 
+# Create a note with a description
+prism new note "Beach Vacation" --desc "Photos from our trip to the beach"
+
+# Edit a node's description
+prism edit <uuid> --desc "Updated summary"
+
+# Show node description
+prism show <uuid> --desc
+
 # Import a file
 prism add ~/Documents/report.pdf
 
@@ -86,11 +95,12 @@ prism tag rename work tasks
 | `prism init` | Initialize a new vault |
 | `prism vault add` | Register an existing vault |
 | `prism vault list` | List registered vaults |
-| `prism new <type>` | Create a new typed node |
+| `prism new <type>` | Create a new typed node (`--desc` for description) |
 | `prism add <path>` | Import a file |
-| `prism edit <uuid>` | Edit a node |
+| `prism edit <uuid>` | Edit a node (`--desc` to set/update/clear description) |
 | `prism rm <uuid>` | Delete a node |
-| `prism show <uuid>` | Display node details |
+| `prism show <uuid>` | Display node details (`--desc` to show description) |
+| `prism list-nodes` | List all nodes (`--desc` for description preview) |
 | `prism link <src> <tgt>` | Create a link |
 | `prism backlinks <uuid>` | Show backlinks |
 | `prism graph` | Export the node graph |
@@ -132,9 +142,9 @@ The REPL provides:
 |---------|-------|-------------|
 | `init` | | Initialize a new vault |
 | `open` | | Open an existing vault |
-| `new` | `n` | Create a new typed node |
-| `show` | `s` | Display node details |
-| `edit` | `e` | Edit a node |
+| `new` | `n` | Create a new typed node (`--desc` for description) |
+| `show` | `s` | Display node details (`--desc` to show description) |
+| `edit` | `e` | Edit a node (`--desc` to set/update/clear description) |
 | `rm` | | Delete a node |
 | `query` | `q` | Search nodes |
 | `link` | `l` | Create a directed link |

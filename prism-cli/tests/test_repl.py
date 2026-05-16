@@ -151,6 +151,10 @@ class TestReplNew:
         output = run_repl(vault, ["new contact John --name=John --email=j@test.com", "exit"])
         assert "Created contact node:" in output
 
+    def test_new_with_desc(self, vault):
+        output = run_repl(vault, ["new note 'Described Note' --desc 'A summary'", "exit"])
+        assert "Created note node:" in output
+
 
 # ── Show ────────────────────────────────────────────────────────────────
 
@@ -161,6 +165,15 @@ class TestReplShow:
         meta = manager.create_node(type_name="note", title="Show Test")
         output = run_repl(vault, [f"show {meta.uuid[:12]}", "exit"])
         assert "Show Test" in output
+
+    def test_show_node_with_desc(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(
+            type_name="note", title="Desc Show", description="REPL description"
+        )
+        output = run_repl(vault, [f"show {meta.uuid[:12]} --desc", "exit"])
+        assert "Desc Show" in output
+        assert "REPL description" in output
 
     def test_show_not_found(self, vault):
         output = run_repl(vault, ["show 00000000-0000-0000-0000-000000000000", "exit"])
@@ -209,6 +222,14 @@ class TestReplEdit:
         )
         output = run_repl(vault, [f"edit {meta.uuid[:12]}", "", "", "exit"])
         assert "Fields updated" in output or "No changes detected" in output
+
+    def test_edit_with_desc(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Edit Desc")
+        output = run_repl(vault, [f"edit {meta.uuid[:12]} --desc Summary", "exit"])
+        assert "Description updated" in output
+        desc = manager.get_description(meta.uuid)
+        assert desc == "Summary"
 
 
 # ── Rm ──────────────────────────────────────────────────────────────────

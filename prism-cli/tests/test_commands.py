@@ -130,6 +130,24 @@ class TestCreateNode:
 
 
 class TestShowDeleteVerify:
+    def test_show_node_with_description(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(
+            type_name="note", title="Show Desc", description="My description"
+        )
+        result = commands.show_node(vault, meta.uuid, show_description=True)
+        assert result.ok
+        assert "My description" in result.data["output"]
+
+    def test_show_node_without_description_when_flag_not_set(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(
+            type_name="note", title="Hidden Desc", description="Should not appear"
+        )
+        result = commands.show_node(vault, meta.uuid, show_description=False)
+        assert result.ok
+        assert "Should not appear" not in result.data["output"]
+
     def test_show_node(self, vault):
         manager = NodeManager(vault.path)
         meta = manager.create_node(type_name="note", title="Show Me")
@@ -153,6 +171,20 @@ class TestShowDeleteVerify:
         result = commands.delete_node(vault, "00000000-0000-0000-0000-000000000000")
         assert not result.ok
         assert result.code == "NOT_FOUND"
+
+    def test_verify_node_with_description(self, vault, vault_dir):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Verify Desc", description="Verify me")
+        result = commands.verify_node(vault, meta.uuid[:12])
+        assert result.ok
+        assert result.data.get("description") == "OK"
+
+    def test_verify_node_without_description(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="No Desc")
+        result = commands.verify_node(vault, meta.uuid[:12])
+        assert result.ok
+        assert result.data.get("description") == ""
 
     def test_verify_ok(self, vault, vault_dir):
         manager = NodeManager(vault.path)
@@ -221,6 +253,26 @@ class TestLinkBacklinks:
         result = commands.list_backlinks(vault, meta.uuid)
         assert result.ok
         assert len(result.data["backlinks"]) == 0
+
+
+class TestListNodes:
+    def test_list_nodes_with_desc(self, vault):
+        manager = NodeManager(vault.path)
+        manager.create_node(type_name="note", title="List Desc", description="Preview text")
+        result = commands.list_nodes(vault, show_desc=True)
+        assert result.ok
+        nodes = result.data["nodes"]
+        described = [n for n in nodes if n.get("description")]
+        assert len(described) >= 1
+        assert "Preview text" in described[0]["description"]
+
+    def test_list_nodes_without_desc(self, vault):
+        manager = NodeManager(vault.path)
+        manager.create_node(type_name="note", title="No Desc")
+        result = commands.list_nodes(vault, show_desc=False)
+        assert result.ok
+        for n in result.data["nodes"]:
+            assert "description" not in n
 
 
 class TestGraphQueryStatus:
@@ -377,6 +429,26 @@ class TestManagePaths:
         result = commands.manage_paths(vault, "unknown")
         assert not result.ok
         assert result.code == "UNKNOWN_ACTION"
+
+
+class TestSetNodeDescription:
+    def test_set_description(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Set Desc")
+        result = commands.set_node_description(vault, meta.uuid, "New description")
+        assert result.ok
+        assert result.data["action"] == "set"
+        desc = manager.get_description(meta.uuid)
+        assert desc == "New description"
+
+    def test_clear_description(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Clear Desc", description="To clear")
+        result = commands.set_node_description(vault, meta.uuid, "")
+        assert result.ok
+        assert result.data["action"] == "cleared"
+        desc = manager.get_description(meta.uuid)
+        assert desc is None
 
 
 class TestEditNode:

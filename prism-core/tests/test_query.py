@@ -149,6 +149,29 @@ class TestQueryEngine:
         result = engine.execute(ast)
         assert len(result) == 1
 
+    def test_text_match_in_description(self, vault_dir):
+        uid = "eeeeeeee-0000-0000-0000-000000000000"
+        storage_dir = compute_storage_path(vault_dir, uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        meta = NodeMetadata(
+            uuid=uid,
+            type="note",
+            title="Desc Search",
+            blob_extension="md",
+            desc_sha256="abc",
+            desc_mtime="123",
+            desc_size=14,
+        )
+        meta.save(NodeMetadata.metadata_path(storage_dir))
+        desc_path = NodeMetadata.description_path(storage_dir)
+        with open(desc_path, "w") as f:
+            f.write("This node has a secret_plan in the description")
+        engine = QueryEngine(vault_dir)
+        ast = QueryParser().parse("secret_plan")
+        result = engine.execute(ast)
+        assert len(result) == 1
+        assert result[0].title == "Desc Search"
+
     def test_text_match_in_body(self, vault_dir):
         uid = "dddddddd-0000-0000-0000-000000000000"
         storage_dir = compute_storage_path(vault_dir, uid)

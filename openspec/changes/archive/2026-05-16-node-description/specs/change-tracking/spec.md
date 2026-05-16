@@ -1,8 +1,4 @@
-## Purpose
-
-The change-tracking capability monitors node metadata and blob files for modifications, enabling the system to detect changes, re-extract links, and maintain sync state without external indexing.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Per-node mtime tracking
 
@@ -32,7 +28,7 @@ The system SHALL report the state of the vault: changed nodes, new files, orphan
 #### Scenario: Show changed nodes
 - **WHEN** user runs `prism status`
 - **THEN** the system SHALL walk `.storage/`, stat each node directory, compare blob mtime with stored value
-- **THEN** nodes with mismatched blob or description mtime SHALL be listed under "Changed nodes"
+- **THEN** nodes with mismatched blob mtime SHALL be listed under "Changed nodes"
 
 #### Scenario: Detect description changes
 - **WHEN** user runs `prism status` and a node's `description.md` mtime differs from stored `desc_mtime`
@@ -58,12 +54,12 @@ The system SHALL report the state of the vault: changed nodes, new files, orphan
 When a note's body or description changes, the system SHALL re-extract `[[uuid]]` links from the changed content.
 
 #### Scenario: Re-extract on status
-- **WHEN** user runs `prism status` and a changed note is detected
+- **WHEN** user runs `prism status` and a changed note is detected (body or description change)
 - **THEN** the system SHALL offer: "Re-extract links from changed note <uuid>? [y/N]"
 - **THEN** on confirmation, re-extract `[[uuid]]` patterns from both body and description, and update metadata.toml links array
 
 #### Scenario: Auto-re-extract on edit
-- **WHEN** user runs `prism edit` and saves changes
+- **WHEN** user runs `prism edit` and saves body changes
 - **THEN** the system SHALL automatically re-extract links without prompting
 
 #### Scenario: Re-extract links on description edit
@@ -71,13 +67,3 @@ When a note's body or description changes, the system SHALL re-extract `[[uuid]]
 - **THEN** the system SHALL update the description tracking fields
 - **THEN** the system SHALL set `sync_dirty = true`
 - **THEN** the system SHALL extract `[[uuid]]` links from the new description text
-
-### Requirement: Dirty flag for sync
-
-The system SHALL maintain a dirty flag mechanism for future sync integration.
-
-#### Scenario: Flag node as dirty
-- **WHEN** a node's blob or metadata changes
-- **THEN** the system SHALL set `sync_dirty = true` in metadata.toml
-- **THEN** the system SHALL update `updated_at` to current timestamp
-- **THEN** these two fields serve as the cursor for the future sync daemon

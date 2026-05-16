@@ -37,6 +37,9 @@ class NodeMetadata:
     blob_mtime: str = ""
     blob_size: int = 0
     blob_sha256: str = ""
+    desc_mtime: str = ""
+    desc_size: int = 0
+    desc_sha256: str = ""
     sync_dirty: bool = False
 
     def __post_init__(self) -> None:
@@ -70,6 +73,9 @@ class NodeMetadata:
             blob_mtime=doc.get("blob_mtime", ""),
             blob_size=doc.get("blob_size", 0),
             blob_sha256=doc.get("blob_sha256", ""),
+            desc_mtime=doc.get("desc_mtime", ""),
+            desc_size=doc.get("desc_size", 0),
+            desc_sha256=doc.get("desc_sha256", ""),
             sync_dirty=doc.get("sync_dirty", False),
         )
 
@@ -115,6 +121,12 @@ class NodeMetadata:
             doc["blob_size"] = self.blob_size
         if self.blob_sha256:
             doc["blob_sha256"] = self.blob_sha256
+        if self.desc_mtime:
+            doc["desc_mtime"] = self.desc_mtime
+        if self.desc_size:
+            doc["desc_size"] = self.desc_size
+        if self.desc_sha256:
+            doc["desc_sha256"] = self.desc_sha256
         doc["sync_dirty"] = self.sync_dirty
         return tomlkit.dumps(doc)
 
@@ -138,3 +150,15 @@ class NodeMetadata:
             Path to metadata.toml.
         """
         return os.path.join(storage_dir, "metadata.toml")
+
+    @staticmethod
+    def description_path(storage_dir: str) -> str:
+        """Get the path to description.md within a storage directory.
+
+        Args:
+            storage_dir: Storage directory path.
+
+        Returns:
+            Path to description.md.
+        """
+        return os.path.join(storage_dir, "description.md")

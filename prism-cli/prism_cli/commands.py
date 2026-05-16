@@ -123,21 +123,49 @@ def open_vault(path: str) -> CmdResult:
         return CmdResult(ok=False, error=str(e), code="NOT_FOUND", data={})
 
 
-def show_node(vault: Vault, uuid: str) -> CmdResult:
+def show_node(vault: Vault, uuid: str, show_description: bool = False) -> CmdResult:
     """Display a node's details.
 
     Args:
         vault: The vault containing the node.
         uuid: Full or partial UUID of the node.
+        show_description: Whether to include the description section.
 
     Returns:
         CmdResult with formatted output string.
     """
     manager = NodeManager(vault.path)
-    output = manager.show_node(uuid)
+    output = manager.show_node(uuid, show_description=show_description)
     if output is None:
         return CmdResult(ok=False, error=f"Node not found: {uuid}", code="NOT_FOUND", data={})
     return CmdResult(ok=True, data={"output": output})
+
+
+def list_nodes(vault: Vault, show_desc: bool = False) -> CmdResult:
+    """List all nodes in the vault.
+
+    Args:
+        vault: The vault to list nodes from.
+        show_desc: Whether to include description preview.
+
+    Returns:
+        CmdResult with nodes list.
+    """
+    manager = NodeManager(vault.path)
+    nodes = manager.list_nodes()
+    result_list: list[dict[str, object]] = []
+    for n in nodes:
+        entry: dict[str, object] = {
+            "uuid": n.uuid,
+            "type": n.type,
+            "title": n.title,
+            "tags": n.tags,
+        }
+        if show_desc:
+            desc = manager.get_description(n.uuid)
+            entry["description"] = desc or ""
+        result_list.append(entry)
+    return CmdResult(ok=True, data={"nodes": result_list})
 
 
 def delete_node(vault: Vault, uuid: str, force: bool = False) -> CmdResult:
@@ -161,7 +189,7 @@ def delete_node(vault: Vault, uuid: str, force: bool = False) -> CmdResult:
 
 
 def verify_node(vault: Vault, uuid: str) -> CmdResult:
-    """Verify a node's blob integrity by comparing SHA-256 hashes.
+    """Verify a node's blob and description integrity by comparing SHA-256 hashes.
 
     Args:
         vault: The vault containing the node.
@@ -181,10 +209,20 @@ def verify_node(vault: Vault, uuid: str) -> CmdResult:
     if node is None:
         return CmdResult(ok=False, error=f"Node not found: {uuid}", code="NOT_FOUND", data={})
 
-    ok = manager.storage.verify_integrity(full_uuid, node.blob_sha256)
-    if ok:
-        return CmdResult(ok=True, data={"result": "OK"})
-    return CmdResult(ok=False, error="CORRUPTED", code="CORRUPTED", data={})
+    blob_ok = manager.storage.verify_integrity(full_uuid, node.blob_sha256)
+    desc_result = ""
+    if node.desc_sha256:
+        desc_ok = manager.storage.verify_description_integrity(full_uuid, node.desc_sha256)
+        desc_result = "OK" if desc_ok else "CORRUPTED"
+    all_ok = blob_ok and (desc_result != "CORRUPTED")
+    return CmdResult(
+        ok=all_ok,
+        data={
+            "result": "OK" if all_ok else "CORRUPTED",
+            "blob": "OK" if blob_ok else "CORRUPTED",
+            "description": desc_result,
+        },
+    )
 
 
 def export_graph(
@@ -305,6 +343,7 @@ def create_node(
     fields: Optional[dict[str, object]] = None,
     tags: Optional[list[str]] = None,
     add_path: Optional[str] = None,
+    description: Optional[str] = None,
 ) -> CmdResult:
     """Create a new typed node.
 
@@ -326,6 +365,7 @@ def create_node(
             title=title,
             fields=fields or {},
             tags=tags,
+            description=description,
         )
         path_added = None
         if add_path:
@@ -495,6 +535,28 @@ def commit_body_edit(
         return CmdResult(ok=False, error=str(e), code="NOT_FOUND", data={})
     manager.commit_body_edit(full_uuid, new_mtime, new_size, new_sha256)
     return CmdResult(ok=True, data={"uuid": full_uuid})
+
+
+def set_node_description(vault: Vault, uuid: str, description: str) -> CmdResult:
+    """Set, update, or clear a node's description.
+
+    Args:
+        vault: The vault containing the node.
+        uuid: Full or partial UUID of the node.
+        description: Description text (empty string clears it).
+
+    Returns:
+        CmdResult confirming the update.
+    """
+    manager = NodeManager(vault.path)
+    try:
+        full_uuid = resolve_uuid(vault.path, uuid)
+    except ValueError as e:
+        return CmdResult(ok=False, error=str(e), code="NOT_FOUND", data={})
+    manager.set_description(full_uuid, description)
+    if description:
+        return CmdResult(ok=True, data={"uuid": full_uuid, "action": "set"})
+    return CmdResult(ok=True, data={"uuid": full_uuid, "action": "cleared"})
 
 
 def update_node_fields(vault: Vault, uuid: str, changes: dict[str, str]) -> CmdResult:
