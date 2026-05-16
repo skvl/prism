@@ -8,7 +8,7 @@ from typing import Optional
 
 import tomlkit
 
-from prism.types.schema import FieldDef, TypeSchema, VALID_BODY_MODELS, VALID_TYPES
+from prism.types.schema import VALID_BODY_MODELS, VALID_TYPES, FieldDef, TypeSchema
 
 
 class TypeLoader:
@@ -64,14 +64,21 @@ class TypeLoader:
             icon = doc.get("icon", "")
             body_model = doc.get("body_model", "null")
             if body_model not in VALID_BODY_MODELS:
-                print(f"Validation error: type '{name}' has invalid body_model '{body_model}'. Skipping.")
+                print(
+                    f"Validation error: type '{name}' has invalid "
+                    f"body_model '{body_model}'. Skipping."
+                )
                 return None
 
             fields: list[FieldDef] = []
             for raw in doc.get("fields", []):
                 field_type = raw.get("type", "string")
                 if field_type not in VALID_TYPES:
-                    print(f"Validation error: type '{name}' field '{raw.get('name')}' has invalid type '{field_type}'. Skipping.")
+                    print(
+                        f"Validation error: type '{name}' field "
+                        f"'{raw.get('name')}' has invalid type "
+                        f"'{field_type}'. Skipping."
+                    )
                     continue
                 fields.append(
                     FieldDef(

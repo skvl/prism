@@ -4,7 +4,6 @@ Evaluates QueryAST against a vault's nodes,
 supporting tag/type/path filters and full-text search.
 """
 
-import json
 import os
 import subprocess
 from typing import Any, Optional

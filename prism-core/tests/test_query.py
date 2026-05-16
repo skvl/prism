@@ -141,7 +141,9 @@ class TestQueryEngine:
         uid3 = "b0b0b0b0-0000-0000-0000-000000000000"
         storage_dir = compute_storage_path(vault_dir, uid3)
         os.makedirs(storage_dir, exist_ok=True)
-        meta = NodeMetadata(uuid=uid3, type="note", title="Budget Report", fields={"amount": "1000"})
+        meta = NodeMetadata(
+            uuid=uid3, type="note", title="Budget Report", fields={"amount": "1000"}
+        )
         meta.save(NodeMetadata.metadata_path(storage_dir))
         engine = QueryEngine(vault_dir)
         ast = QueryParser().parse("1000")

@@ -385,8 +385,10 @@ class TestNodeManager:
 
     def test_get_body_info_no_blob_extension(self, vault_dir):
         manager = NodeManager(vault_dir)
-        meta = manager.create_node(type_name="contact", title="No Body",
-                                    fields={"name": "X", "email": "x@x"})
+        meta = manager.create_node(
+            type_name="contact", title="No Body",
+            fields={"name": "X", "email": "x@x"},
+        )
         result = manager.get_body_info(meta.uuid)
         assert result is None
 
@@ -448,8 +450,10 @@ class TestNodeManager:
 
     def test_get_field_info_existing(self, vault_dir):
         manager = NodeManager(vault_dir)
-        meta = manager.create_node(type_name="contact", title="Field Test",
-                                    fields={"name": "Alice", "email": "a@b"})
+        meta = manager.create_node(
+            type_name="contact", title="Field Test",
+            fields={"name": "Alice", "email": "a@b"},
+        )
         schema, values = manager.get_field_info(meta.uuid)
         assert schema.name == "contact"
         assert values["name"] == "Alice"
@@ -468,8 +472,10 @@ class TestNodeManager:
 
     def test_update_node_fields_single(self, vault_dir):
         manager = NodeManager(vault_dir)
-        meta = manager.create_node(type_name="contact", title="Single Update",
-                                    fields={"name": "Old", "email": "o@o"})
+        meta = manager.create_node(
+            type_name="contact", title="Single Update",
+            fields={"name": "Old", "email": "o@o"},
+        )
         assert manager.update_node_fields(meta.uuid, {"name": "New"}) is True
         storage_dir = compute_storage_path(vault_dir, meta.uuid)
         meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
@@ -478,8 +484,10 @@ class TestNodeManager:
 
     def test_update_node_fields_multiple(self, vault_dir):
         manager = NodeManager(vault_dir)
-        meta = manager.create_node(type_name="contact", title="Multi Update",
-                                    fields={"name": "A", "email": "a@a"})
+        meta = manager.create_node(
+            type_name="contact", title="Multi Update",
+            fields={"name": "A", "email": "a@a"},
+        )
         assert manager.update_node_fields(meta.uuid, {"name": "B", "email": "b@b"}) is True
         storage_dir = compute_storage_path(vault_dir, meta.uuid)
         meta2 = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
@@ -488,8 +496,10 @@ class TestNodeManager:
 
     def test_update_node_fields_empty_changes(self, vault_dir):
         manager = NodeManager(vault_dir)
-        meta = manager.create_node(type_name="contact", title="Empty Update",
-                                    fields={"name": "X", "email": "x@x"})
+        meta = manager.create_node(
+            type_name="contact", title="Empty Update",
+            fields={"name": "X", "email": "x@x"},
+        )
         assert manager.update_node_fields(meta.uuid, {}) is False
 
     def test_delete_node_raises_value_error_on_backlinks(self, vault_dir):

@@ -1,11 +1,6 @@
-import os
-import tempfile
-
-import pytest
-
+from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML
 from prism.types.schema import FieldDef, TypeSchema
 from prism.types.validator import FieldValidator
-from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML
 
 
 class TestTypeSchema:

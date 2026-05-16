@@ -4,14 +4,13 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
+from prism_cli import commands
+from prism_cli.tutor import Lesson, Step, StepResult, Tutor
 
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path, sha256_file
 from prism.vault.vault import Vault
-
-from prism_cli.tutor import Lesson, Step, StepResult, TOTAL_LESSONS, Tutor
-from prism_cli import commands
 
 
 class TestDataModel:
@@ -33,7 +32,10 @@ class TestDataModel:
             Step(number=1, concept="s1", command="c1", verify=lambda v: True),
             Step(number=2, concept="s2", command="c2", verify=lambda v: True),
         ]
-        lesson = Lesson(number=1, title="Test Lesson", concept="A test", steps=steps, summary="Done")
+        lesson = Lesson(
+            number=1, title="Test Lesson", concept="A test",
+            steps=steps, summary="Done",
+        )
         assert lesson.number == 1
         assert lesson.title == "Test Lesson"
         assert len(lesson.steps) == 2
@@ -110,7 +112,7 @@ class TestVerifyHelpers:
         storage_dir = compute_storage_path(vault.path, meta.uuid)
         meta_path = NodeMetadata.metadata_path(storage_dir)
         meta_loaded = NodeMetadata.from_toml(meta_path)
-        meta_loaded.blob_mtime = str(os.stat(os.path.join(storage_dir, "data.md")).st_mtime)
+        meta_loaded.blob_mtime = "0"
         meta_loaded.save(meta_path)
         body_path = os.path.join(storage_dir, "data.md")
         with open(body_path, "w") as f:
@@ -253,5 +255,5 @@ class TestShowOutput:
         assert "  -> line1" in captured.out
         assert "  -> line2" in captured.out
         # blank lines between should not have -> prefixes
-        lines = [l for l in captured.out.split("\n") if "->" in l]
+        lines = [line for line in captured.out.split("\n") if "->" in line]
         assert len(lines) == 2

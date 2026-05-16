@@ -6,8 +6,7 @@ AND/OR/NOT operators, quoted strings, and text terms.
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
-
+from typing import Any
 
 TOKEN_RE = re.compile(
     r'(tag|type):(\S+)|'

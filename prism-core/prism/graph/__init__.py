@@ -3,6 +3,6 @@
 Exports: LinkExtractor, BacklinkIndex, GraphExporter.
 """
 
-from prism.graph.links import LinkExtractor, BacklinkIndex, GraphExporter
+from prism.graph.links import BacklinkIndex, GraphExporter, LinkExtractor
 
 __all__ = ["LinkExtractor", "BacklinkIndex", "GraphExporter"]

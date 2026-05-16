@@ -5,12 +5,12 @@ path node tree.
 """
 
 import os
-import tomlkit
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
-from prism.node.metadata import NodeMetadata, SEGMENT_PATTERN
+import tomlkit
+
+from prism.node.metadata import SEGMENT_PATTERN, NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.vault.vault import generate_uuid
 
@@ -30,13 +30,13 @@ class PathResolver:
         vault_toml_path = os.path.join(self.vault_path, ".metadata", "vault.toml")
         with open(vault_toml_path) as f:
             doc = tomlkit.load(f)
-        root = doc.get("path_root_uuid")
+        root: str = doc.get("path_root_uuid")  # type: ignore[assignment]
         if not root:
             raise ValueError("No path root configured in vault. Re-initialize vault.")
         self._root_uuid = root
         return root
 
-    def _all_nodes(self) -> list[NodeMetadata]:
+    def all_nodes(self) -> list[NodeMetadata]:
         nodes: list[NodeMetadata] = []
         storage_dir = os.path.join(self.vault_path, ".storage")
         if not os.path.exists(storage_dir):
@@ -51,7 +51,7 @@ class PathResolver:
                         continue
         return nodes
 
-    def _find_children(self, parent_uuid: str, nodes: list[NodeMetadata]) -> list[NodeMetadata]:
+    def find_children(self, parent_uuid: str, nodes: list[NodeMetadata]) -> list[NodeMetadata]:
         children: list[NodeMetadata] = []
         for n in nodes:
             for link in n.links:
@@ -81,11 +81,11 @@ class PathResolver:
 
         segments = [s for s in path_string.strip("/").split("/") if s]
         root_uuid = self._load_root_uuid()
-        nodes = self._all_nodes()
+        nodes = self.all_nodes()
 
         current_uuid = root_uuid
         for segment in segments:
-            children = self._find_children(current_uuid, nodes)
+            children = self.find_children(current_uuid, nodes)
             found = False
             for child in children:
                 if child.fields.get("name") == segment:
@@ -93,7 +93,8 @@ class PathResolver:
                     found = True
                     break
             if not found:
-                raise ValueError(f"Path segment not found: /{'/'.join(segments[:segments.index(segment)+1])}")
+                segment_path = '/'.join(segments[:segments.index(segment) + 1])
+                raise ValueError(f"Path segment not found: /{segment_path}")
 
         return current_uuid
 
@@ -122,11 +123,11 @@ class PathResolver:
                 raise ValueError(f"Invalid path segment character: {seg!r}")
 
         root_uuid = self._load_root_uuid()
-        nodes = self._all_nodes()
+        nodes = self.all_nodes()
 
         current_uuid = root_uuid
         for segment in segments:
-            children = self._find_children(current_uuid, nodes)
+            children = self.find_children(current_uuid, nodes)
             found = False
             for child in children:
                 if child.fields.get("name") == segment:
@@ -164,14 +165,14 @@ class PathResolver:
         Returns:
             List of descendant UUIDs (BFS traversal).
         """
-        nodes = self._all_nodes()
+        nodes = self.all_nodes()
         descendants: list[str] = []
         queue = [uuid]
         visited: set[str] = {uuid}
 
         while queue:
             current = queue.pop(0)
-            children = self._find_children(current, nodes)
+            children = self.find_children(current, nodes)
             for child in children:
                 if child.uuid not in visited:
                     visited.add(child.uuid)
@@ -206,8 +207,8 @@ class PathResolver:
         except (ValueError, KeyError):
             return []
 
-        nodes = self._all_nodes()
-        children = self._find_children(parent_uuid, nodes)
+        nodes = self.all_nodes()
+        children = self.find_children(parent_uuid, nodes)
 
         matches: list[str] = []
         for child in children:
@@ -227,7 +228,7 @@ class PathResolver:
         Returns:
             Full path string like /foo/bar.
         """
-        nodes = self._all_nodes()
+        nodes = self.all_nodes()
         nodes_by_uuid = {n.uuid: n for n in nodes}
         segments: list[str] = []
         current_uuid = uuid

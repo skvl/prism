@@ -7,11 +7,9 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import tomlkit
-
 
 TAG_PATTERN = re.compile(r"\A[\w\-]+\Z")
 

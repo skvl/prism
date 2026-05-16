@@ -3,7 +3,6 @@
 Walks up from a directory to find the nearest vault.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 

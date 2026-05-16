@@ -20,6 +20,11 @@ dev = [
     "pytest>=7.4",
     "ruff>=0.1",
     "mypy>=1.7",
+    "flake8>=7.0",
+    "pylint>=3.0",
+    "pyright>=1.1",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
 ]
 
 [tool.setuptools.packages.find]
@@ -41,3 +46,17 @@ no_implicit_optional = true
 check_untyped_defs = true
 warn_return_any = true
 warn_unused_ignores = true
+
+[tool.flake8]
+max-line-length = 100
+
+[tool.pylint]
+max-line-length = 100
+disable = "C,R"
+
+[tool.pyright]
+extraPaths = ["."]
+
+[tool.bandit]
+skips = ["B101"]
+exclude_dirs = ["tests"]

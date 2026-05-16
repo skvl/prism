@@ -3,16 +3,14 @@ import shutil
 import tempfile
 
 import pytest
-
 from prism.node.manager import NodeManager
 from prism.vault.vault import Vault
 
 from prism_cli.completions import (
-    resolve_completions,
     complete_command,
-    complete_uuid,
     complete_type_name,
-    complete_path,
+    complete_uuid,
+    resolve_completions,
 )
 
 ALIASES = {
@@ -123,7 +121,7 @@ class TestFlagTriggeredCompletion:
 
 class TestTypeNameCompletion:
     def test_complete_type_after_new(self, vault):
-        result = resolve_completions(["new"], "", vault, ALIASES)
+        resolve_completions(["new"], "", vault, ALIASES)
 
     def test_complete_type_name_func(self, vault):
         result = complete_type_name(vault, "")

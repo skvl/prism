@@ -7,7 +7,6 @@ plus sha256_file and compute_storage_path helpers.
 import hashlib
 import os
 import shutil
-from pathlib import Path
 from typing import Optional
 
 from prism.vault.vault import uuid_to_path

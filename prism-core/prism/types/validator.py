@@ -34,11 +34,16 @@ class FieldValidator:
             value = field_values.get(field_def.name)
             if value is None:
                 if field_def.required:
-                    errors.append(f"Field '{field_def.name}' is required for type '{self.schema.name}'")
+                    errors.append(
+                        f"Field '{field_def.name}' is required for type '{self.schema.name}'"
+                    )
                 continue
 
             if not self._check_type(value, field_def.type):
-                errors.append(f"Field '{field_def.name}' should be of type '{field_def.type}', got {type(value).__name__}")
+                errors.append(
+                    f"Field '{field_def.name}' should be of type "
+                    f"'{field_def.type}', got {type(value).__name__}"
+                )
 
         return errors
 

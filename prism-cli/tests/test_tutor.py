@@ -3,11 +3,11 @@ import shutil
 import tempfile
 
 import pytest
-
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path, sha256_file
 from prism.vault.vault import Vault
+
 from prism_cli.tutor import Tutor
 
 

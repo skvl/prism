@@ -3,12 +3,10 @@
 Persistent registry of known vaults stored in ~/.config/prism/vaults.toml.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 
 import tomlkit
-
 
 REGISTRY_PATH = Path.home() / ".config" / "prism" / "vaults.toml"
 

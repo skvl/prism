@@ -7,7 +7,6 @@ plus a resolve_uuid helper for partial UUID matching.
 import os
 import shutil
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Optional
 
 from prism.node.metadata import TAG_PATTERN, NodeMetadata
@@ -42,7 +41,8 @@ def resolve_uuid(vault_path: str, partial: str) -> str:
     if len(matches) == 1:
         return matches[0]
     if len(matches) > 1:
-        raise ValueError(f"Multiple nodes match partial UUID '{partial}': {[m[:12] for m in matches]}")
+        short_matches = [m[:12] for m in matches]
+        raise ValueError(f"Multiple nodes match partial UUID '{partial}': {short_matches}")
     raise ValueError(f"No node found matching UUID '{partial}'")
 
 
@@ -108,7 +108,10 @@ class NodeManager:
             ValueError: If type is unknown, validation fails, or type is 'path'.
         """
         if type_name == "path":
-            raise ValueError("Path nodes cannot be created via `prism new`. Use `prism path create` instead.")
+            raise ValueError(
+                "Path nodes cannot be created via `prism new`. "
+                "Use `prism path create` instead."
+            )
 
         schema = self.type_loader.load(type_name)
         if schema is None:
@@ -156,6 +159,10 @@ class NodeManager:
             with open(body_path, "w") as f:
                 f.write(f"# {title}\n\n")
             meta.blob_extension = "md"
+            stat_info = os.stat(body_path)
+            meta.blob_mtime = str(stat_info.st_mtime)
+            meta.blob_size = stat_info.st_size
+            meta.blob_sha256 = sha256_file(body_path)
 
         meta_path = NodeMetadata.metadata_path(storage_dir)
         meta.save(meta_path)
@@ -382,7 +389,11 @@ class NodeManager:
                         meta = NodeMetadata.from_toml(os.path.join(root, fname))
                         for link in meta.links:
                             if link.get("target") == uid:
-                                result.append({"uuid": meta.uuid, "title": meta.title, "type": meta.type})
+                                result.append({
+                                    "uuid": meta.uuid,
+                                    "title": meta.title,
+                                    "type": meta.type,
+                                })
                     except Exception:
                         continue
         return result

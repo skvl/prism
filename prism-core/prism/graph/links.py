@@ -7,8 +7,7 @@ and exports graphs in DOT or JSON format.
 import json
 import os
 import re
-from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
@@ -167,7 +166,7 @@ class GraphExporter:
             JSON string with nodes and edges arrays.
         """
         filtered = self._filter_nodes(nodes, include_paths)
-        export_nodes: list[dict] = []
+        export_nodes: list[dict[str, Any]] = []
         for node in filtered:
             export_nodes.append({
                 "uuid": node.uuid,
@@ -176,7 +175,7 @@ class GraphExporter:
                 "tags": node.tags,
             })
 
-        export_edges: list[dict] = []
+        export_edges: list[dict[str, Any]] = []
         for node in filtered:
             for link in node.links:
                 export_edges.append({

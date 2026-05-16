@@ -4,11 +4,11 @@ import shutil
 import tempfile
 
 import pytest
-
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.vault.vault import Vault
+
 from prism_cli.repl import Repl
 
 
@@ -195,8 +195,10 @@ class TestReplEdit:
 
     def test_edit_field_node(self, vault):
         manager = NodeManager(vault.path)
-        meta = manager.create_node(type_name="contact", title="Contact Edit",
-                                    fields={"name": "Old Name", "email": "old@test.com"})
+        meta = manager.create_node(
+            type_name="contact", title="Contact Edit",
+            fields={"name": "Old Name", "email": "old@test.com"},
+        )
         output = run_repl(vault, [f"edit {meta.uuid[:12]}", "", "", "exit"])
         assert "Fields updated" in output or "No changes detected" in output
 
@@ -232,7 +234,10 @@ class TestReplLink:
     def test_link_source_not_found(self, vault):
         manager = NodeManager(vault.path)
         target = manager.create_node(type_name="note", title="Target")
-        output = run_repl(vault, [f"link 00000000-0000-0000-0000-000000000000 {target.uuid[:12]}", "exit"])
+        output = run_repl(
+            vault,
+            [f"link 00000000-0000-0000-0000-000000000000 {target.uuid[:12]}", "exit"],
+        )
         assert "Source node not found" in output
 
     def test_link_already_exists(self, vault):
@@ -287,7 +292,10 @@ class TestReplGraph:
         manager.create_node(type_name="note", title="Graph JSON")
         output = run_repl(vault, ["graph json", "exit"])
         import json
-        data = json.loads(output[output.index("{"):output.rindex("}")+1] if "{" in output and "}" in output else "{}")
+        start = output.index("{")
+        end = output.rindex("}") + 1
+        json_str = output[start:end] if "{" in output and "}" in output else "{}"
+        data = json.loads(json_str)
         assert isinstance(data, dict) if data else True
 
     def test_graph_empty(self, vault):
@@ -485,7 +493,10 @@ class TestReplAliases:
         manager = NodeManager(vault.path)
         meta = manager.create_node(type_name="note", title="Edit Ali")
         output = run_repl(vault, [f"e {meta.uuid[:12]}", "exit"])
-        assert "Body updated" in output or "No changes detected" in output or "not found" in output or "Usage" in output
+        assert (
+            "Body updated" in output or "No changes detected" in output
+            or "not found" in output or "Usage" in output
+        )
 
     def test_g_alias_graph(self, vault):
         output = run_repl(vault, ["g", "exit"])

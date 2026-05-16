@@ -5,7 +5,6 @@ plus UUID generation and path conversion utilities.
 """
 
 import os
-import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,7 +51,10 @@ class Vault:
     Provides class methods for initializing and opening vaults,
     and an instance method for validating vault structure.
     """
-    def __init__(self, path: str, vault_uuid: str, schema_version: int, created_at: str, path_root_uuid: str = "") -> None:
+    def __init__(
+        self, path: str, vault_uuid: str, schema_version: int,
+        created_at: str, path_root_uuid: str = "",
+    ) -> None:
         """Initialize a Vault instance.
 
         Args:

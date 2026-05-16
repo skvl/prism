@@ -3,11 +3,10 @@ import shutil
 import tempfile
 
 import pytest
+from prism_cli import commands, completions
+from prism_cli.repl import ALIASES, Repl
 
 from prism.vault.vault import Vault
-from prism_cli import commands
-from prism_cli import completions
-from prism_cli.repl import ALIASES, Repl
 
 
 class TestReplDegradedMode:

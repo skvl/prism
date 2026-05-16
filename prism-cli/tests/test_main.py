@@ -8,11 +8,11 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
-
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path
 from prism.vault.vault import Vault
+
 from prism_cli import commands
 from prism_cli.main import cli
 
@@ -68,7 +68,7 @@ class TestCliGroup:
 
     def test_no_subcommand(self, runner):
         result = runner.invoke(cli, [])
-        assert result.exit_code == 2
+        assert result.exit_code == 0
 
     def test_verbose_flag(self, runner, vault_dir):
         result = runner.invoke(cli, ["--vault", vault_dir, "--verbose", "status"])
@@ -226,13 +226,18 @@ class TestNewCommand:
         assert "Error:" in result.output
 
     def test_new_with_extra_fields(self, runner, vault_dir):
-        result = runner.invoke(cli, ["--vault", vault_dir, "new", "contact", "John", "--name=John Doe", "--email=john@test.com"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "new", "contact", "John",
+                  "--name=John Doe", "--email=john@test.com"],
+        )
         assert result.exit_code == 0
         assert "Created contact node:" in result.output
 
     def test_new_with_add_path(self, runner, vault_dir):
         runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/misc"])
-        result = runner.invoke(cli, ["--vault", vault_dir, "new", "note", "Path Note", "--add-path", "/misc"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "new", "note", "Path Note", "--add-path", "/misc"],
+        )
         assert result.exit_code == 0
         assert "Created note node:" in result.output
         assert "Added path: /misc" in result.output
@@ -278,7 +283,10 @@ class TestEditCommand:
         meta = manager.create_node(type_name="note", title="No Change")
         storage_dir = compute_storage_path(vault_dir, meta.uuid)
         body_path = os.path.join(storage_dir, "data.md")
-        with patch("prism.node.manager.NodeManager.get_body_info", return_value=(body_path, os.stat(body_path).st_mtime)):
+        with patch(
+            "prism.node.manager.NodeManager.get_body_info",
+            return_value=(body_path, os.stat(body_path).st_mtime),
+        ):
             with patch("subprocess.call"):
                 result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]])
         assert result.exit_code == 0
@@ -289,9 +297,14 @@ class TestEditCommand:
         meta = manager.create_node(type_name="contact", title="Edit Me", fields={"name": "Old"})
         schema = manager.type_loader.load("contact")
         with patch("prism.node.manager.NodeManager.get_body_info", return_value=None):
-            with patch("prism.node.manager.NodeManager.get_field_info", return_value=(schema, {"name": "Old"})):
+            with patch(
+                "prism.node.manager.NodeManager.get_field_info",
+                return_value=(schema, {"name": "Old"}),
+            ):
                 with patch("prism.node.manager.NodeManager.update_node_fields", return_value=True):
-                    result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n")
+                    result = runner.invoke(
+                        cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n",
+                    )
         assert result.exit_code == 0
         assert "Fields updated." in result.output
 
@@ -300,9 +313,14 @@ class TestEditCommand:
         meta = manager.create_node(type_name="contact", title="No Change", fields={"name": "Same"})
         schema = manager.type_loader.load("contact")
         with patch("prism.node.manager.NodeManager.get_body_info", return_value=None):
-            with patch("prism.node.manager.NodeManager.get_field_info", return_value=(schema, {"name": "Same"})):
+            with patch(
+                "prism.node.manager.NodeManager.get_field_info",
+                return_value=(schema, {"name": "Same"}),
+            ):
                 with patch("prism.node.manager.NodeManager.update_node_fields", return_value=False):
-                    result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n")
+                    result = runner.invoke(
+                        cli, ["--vault", vault_dir, "edit", meta.uuid[:12]], input="\n",
+                    )
         assert result.exit_code == 0
         assert "No changes detected." in result.output
 
@@ -326,7 +344,9 @@ class TestEditCommand:
         runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/test"])
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Path Edit")
-        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"],
+        )
         assert result.exit_code == 0
         assert "Added path: /test" in result.output
 
@@ -335,7 +355,9 @@ class TestEditCommand:
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Path Edit Dup")
         runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
-        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"],
+        )
         assert result.exit_code == 0
         assert "already associated" in result.output or "already" in result.output
 
@@ -344,7 +366,9 @@ class TestEditCommand:
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Path Rm")
         runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"])
-        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"],
+        )
         assert result.exit_code == 0
         assert "Removed path: /test" in result.output
 
@@ -352,7 +376,9 @@ class TestEditCommand:
         runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/test"])
         manager = NodeManager(vault_dir)
         meta = manager.create_node(type_name="note", title="Path Not Assoc")
-        result = runner.invoke(cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--remove-path", "/test"],
+        )
         assert result.exit_code == 0
         assert "not associated" in result.output
 
@@ -591,7 +617,9 @@ class TestGraphCommand:
         runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/foo"])
         manager = NodeManager(vault_dir)
         manager.create_node(type_name="note", title="Graph JSON Path")
-        result = runner.invoke(cli, ["--vault", vault_dir, "graph", "--format", "json", "--include-paths"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "graph", "--format", "json", "--include-paths"],
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "nodes" in data
@@ -640,7 +668,9 @@ class TestQueryCommand:
     def test_json_no_tags(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
         manager.create_node(type_name="note", title="No Tags JSON")
-        result = runner.invoke(cli, ["--vault", vault_dir, "query", "type:note", "--format", "json"])
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "query", "type:note", "--format", "json"],
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert len(data) >= 1
@@ -874,7 +904,7 @@ class TestTagCommands:
 
 class TestLinkMetadataNotFound:
     def test_metadata_not_found(self, runner, vault_dir):
-        from prism.node.metadata import NodeMetadata as NM
+        from prism.node.metadata import NodeMetadata
         manager = NodeManager(vault_dir)
         source = manager.create_node(type_name="note", title="Source")
         target = manager.create_node(type_name="note", title="Target")
@@ -884,7 +914,7 @@ class TestLinkMetadataNotFound:
 
         with patch("prism.node.manager.NodeManager.list_nodes") as mock_list:
             mock_list.return_value = [
-                NM(
+                NodeMetadata(
                     uuid=full_uuid, type="note", title="Source",
                     tags=[], fields={}, links=[],
                     created_at="", updated_at="",

@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Optional
 
@@ -95,7 +95,13 @@ class Tutor:
         return None
 
     def _write_builtin_types(self, vault: Vault) -> None:
-        from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
+        from prism.types.builtins import (
+            BOOKMARK_TOML,
+            CONTACT_TOML,
+            FILE_TOML,
+            NOTE_TOML,
+            PATH_TOML,
+        )
 
         types_dir = os.path.join(vault.path, ".metadata", "types")
         os.makedirs(types_dir, exist_ok=True)
@@ -110,7 +116,7 @@ class Tutor:
         for fname, content in types.items():
             path = os.path.join(types_dir, fname)
             if not os.path.exists(path):
-                with open(path, "w") as f:
+                with open(path, "w", encoding="utf-8") as f:
                     f.write(content)
 
     def _cleanup(self, keep: bool) -> None:
@@ -195,7 +201,7 @@ class Tutor:
 
     # --- Execution ---
 
-    def _execute_command(self, command_str: str) -> subprocess.CompletedProcess:
+    def _execute_command(self, command_str: str) -> subprocess.CompletedProcess[str]:
         """Execute a shell command in the temp vault directory.
 
         Args:
@@ -204,16 +210,14 @@ class Tutor:
         Returns:
             The completed process result.
         """
-        try:
-            result = subprocess.run(
-                command_str,
-                shell=True,
-                capture_output=True,
-                text=True,
-                cwd=self.temp_dir,
-            )
-        except KeyboardInterrupt:
-            raise
+        result = subprocess.run(
+            command_str,
+            shell=True,  # nosec B602  # controlled lesson-plan commands
+            capture_output=True,
+            text=True,
+            cwd=self.temp_dir,
+            check=False,
+        )
 
         if result.returncode == -signal.SIGINT:
             raise KeyboardInterrupt()
@@ -334,8 +338,8 @@ class Tutor:
         Returns:
             True if the expected UUID is in results.
         """
-        from prism.query.parser import QueryParser
         from prism.query.engine import QueryEngine
+        from prism.query.parser import QueryParser
         parser = QueryParser()
         ast = parser.parse(query_str)
         engine = QueryEngine(vault.path)
@@ -424,7 +428,7 @@ class Tutor:
         tags_dict = manager.list_tags()
         return old_tag not in tags_dict and new_tag in tags_dict
 
-    def _verify_always_true(self, vault: Vault) -> bool:
+    def _verify_always_true(self, _vault: Vault) -> bool:
         """A verification that always passes (for display-only steps)."""
         return True
 
@@ -560,7 +564,7 @@ class Tutor:
         body_path = os.path.join(storage_dir, "data.md")
         if not os.path.exists(body_path):
             os.makedirs(storage_dir, exist_ok=True)
-        with open(body_path, "w") as f:
+        with open(body_path, "w", encoding="utf-8") as f:
             f.write(content)
 
     def _run_step(self, step: Step) -> StepResult:
@@ -583,10 +587,7 @@ class Tutor:
 
         self._show_command(expected_cmd)
 
-        try:
-            user_input = input("Type command (or ENTER to auto-run): $ ").strip()
-        except (EOFError, KeyboardInterrupt):
-            raise
+        user_input = input("Type command (or ENTER to auto-run): $ ").strip()
 
         if not user_input:
             self._show_auto_run(expected_cmd)
@@ -597,10 +598,7 @@ class Tutor:
             actual_cmd = user_input
         else:
             self._show_warning(step.warning or "That doesn't match the suggested command.")
-            try:
-                retry = input("Try again? [Y/n] ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                raise
+            retry = input("Try again? [Y/n] ").strip().lower()
             if retry == "y" or retry == "":
                 return self._run_step(step)
             self._show_auto_run(expected_cmd)
@@ -611,10 +609,7 @@ class Tutor:
         if result.returncode != 0:
             if result.stderr:
                 self._show_warning(result.stderr.strip())
-            try:
-                retry = input("Command failed. Try again? [Y/n] ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                raise
+            retry = input("Command failed. Try again? [Y/n] ").strip().lower()
             if retry == "y" or retry == "":
                 return self._run_step(step)
             self._show_warning("Skipping step.")
@@ -628,10 +623,7 @@ class Tutor:
             return StepResult.SUCCESS
 
         self._show_warning(step.warning or "Verification failed.")
-        try:
-            retry = input("Try again? [Y/n] ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            raise
+        retry = input("Try again? [Y/n] ").strip().lower()
         if retry == "y" or retry == "":
             return self._run_step(step)
         self._show_warning("Skipping step.")
@@ -658,7 +650,7 @@ class Tutor:
                             "`prism init` sets up the .metadata and .storage directories "
                             "that Prism needs.",
                     command="prism init .",
-                    verify=lambda v: self._verify_vault_init(v),
+                    verify=self._verify_vault_init,
                     warning="Make sure you ran `prism init .`",
                 ),
                 Step(
@@ -666,7 +658,7 @@ class Tutor:
                     concept="`prism status` shows the current state of your vault. "
                             "Since we just created it, everything should be clean.",
                     command="prism status",
-                    verify=lambda v: self._verify_vault_init(v),
+                    verify=self._verify_vault_init,
                     warning="Try running `prism status`",
                 ),
             ],
@@ -701,8 +693,9 @@ class Tutor:
                     concept="You can find nodes by tag using the query command. "
                             "`prism query tag:ideas` finds everything tagged 'ideas'.",
                     command="prism query tag:ideas",
-                    verify=lambda v: self._verify_query_result(v, "tag:ideas",
-                        self._resolve_uuid("note1")),
+                    verify=lambda v: self._verify_query_result(
+                        v, "tag:ideas", self._resolve_uuid("note1"),
+                    ),
                     warning="Try: prism query tag:ideas",
                 ),
             ],
@@ -737,8 +730,9 @@ class Tutor:
                     concept="You can query by type too. "
                             "`prism query type:contact` shows only contact nodes.",
                     command="prism query type:contact",
-                    verify=lambda v: self._verify_query_result(v, "type:contact",
-                        self._resolve_uuid("alice")),
+                    verify=lambda v: self._verify_query_result(
+                        v, "type:contact", self._resolve_uuid("alice"),
+                    ),
                     warning="Try: prism query type:contact",
                 ),
             ],
@@ -765,8 +759,9 @@ class Tutor:
                     concept="Link the first note to the second. "
                             "`prism link <source> <target>` creates a directed connection.",
                     command="prism link {note1} {note2}",
-                    verify=lambda v: self._verify_link_exists(v, self._fmt.get("note1", ""),
-                        self._fmt.get("note2", "")),
+                    verify=lambda v: self._verify_link_exists(
+                        v, self._fmt.get("note1", ""), self._fmt.get("note2", ""),
+                    ),
                     warning="Use the UUIDs of your two notes",
                 ),
                 Step(
@@ -793,17 +788,19 @@ class Tutor:
                     concept="Combine conditions with AND. This finds nodes tagged "
                             "'ideas' that are also notes.",
                     command='prism query "tag:ideas AND type:note"',
-                    verify=lambda v: self._verify_query_result(v, "tag:ideas AND type:note",
-                        self._resolve_uuid("note1")),
-                    warning='Try: prism query "tag:ideas AND type:note"',
+                    verify=lambda v: self._verify_query_result(
+                        v, "tag:ideas AND type:note", self._resolve_uuid("note1"),
+                    ),
+                    warning="Try: prism query \"tag:ideas AND type:note\"",
                 ),
                 Step(
                     number=2,
                     concept="Use OR to find nodes matching any condition. "
                             "This finds contacts or bookmarks.",
                     command='prism query "type:contact OR type:bookmark"',
-                    verify=lambda v: self._verify_query_result(v, "type:contact OR type:bookmark",
-                        self._resolve_uuid("alice")),
+                    verify=lambda v: self._verify_query_result(
+                        v, "type:contact OR type:bookmark", self._resolve_uuid("alice"),
+                    ),
                     warning='Try: prism query "type:contact OR type:bookmark"',
                 ),
                 Step(
@@ -874,8 +871,9 @@ class Tutor:
                     concept="Add more tags to an existing node with `prism tag add`. "
                             "Tags are universal — you can add them to any node.",
                     command='prism tag add {note1} meeting',
-                    verify=lambda v: self._verify_node_has_tag(v,
-                        self._resolve_uuid("note1"), "meeting"),
+                    verify=lambda v: self._verify_node_has_tag(
+                        v, self._resolve_uuid("note1"), "meeting",
+                    ),
                     warning="Use the UUID from the previous step",
                 ),
                 Step(
@@ -892,8 +890,9 @@ class Tutor:
                             "from a node. It's safe — removing a non-existent tag "
                             "is a no-op.",
                     command='prism tag rm {note1} meeting',
-                    verify=lambda v: not self._verify_node_has_tag(v,
-                        self._resolve_uuid("note1"), "meeting"),
+                    verify=lambda v: not self._verify_node_has_tag(
+                        v, self._resolve_uuid("note1"), "meeting",
+                    ),
                     warning="Use the UUID of your note",
                 ),
                 Step(
@@ -921,7 +920,7 @@ class Tutor:
                     concept="I've written a quick update to your note's body behind the scenes. "
                             "Now run `prism status` to see what Prism noticed.",
                     command="prism status",
-                    verify=lambda v: self._verify_change_detected(v),
+                    verify=self._verify_change_detected,
                     warning="Try: prism status",
                 ),
                 Step(
@@ -969,5 +968,3 @@ class Tutor:
             print()
             print("Tutorial paused. Run `prism tutor --lesson N` to resume.")
             sys.exit(0)
-
-

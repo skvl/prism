@@ -7,14 +7,12 @@ import os
 import readline
 import subprocess
 import sys
-from typing import Optional
+from typing import Any, Optional, TextIO
 
 from prism.node.storage import sha256_file
 from prism.vault.vault import Vault
 
-from . import commands
-from . import completions
-
+from . import commands, completions
 
 HISTORY_FILE = os.path.expanduser("~/.prism_repl_history")
 MAX_HISTORY = 1000
@@ -44,7 +42,11 @@ class Repl:
     UUID shorthand (`_`), and degraded-mode operation without a vault.
     """
 
-    def __init__(self, vault: Optional[Vault] = None, input_stream=None, output_stream=None) -> None:
+    def __init__(
+        self, vault: Optional[Vault] = None,
+        input_stream: Optional[TextIO] = None,
+        output_stream: Optional[TextIO] = None,
+    ) -> None:
         """Initialize the REPL session.
 
         Args:
@@ -142,7 +144,10 @@ class Repl:
             return True
 
         if cmd in UNSUPPORTED_IN_REPL:
-            self._p(f"The {cmd} command cannot run inside the REPL. Run `prism {cmd}` from your shell.")
+            self._p(
+                f"The {cmd} command cannot run inside the REPL. "
+                f"Run `prism {cmd}` from your shell."
+            )
             return False
 
         if cmd in ALIASES:
@@ -209,7 +214,10 @@ class Repl:
 
     def _cmd_new(self, args: list[str]) -> None:
         if not args:
-            self._p("Usage: new <type> [title] [--tag <tag> ...] [--add-path <path>] [--field=value ...]")
+            self._p(
+                "Usage: new <type> [title] [--tag <tag> ...] "
+                "[--add-path <path>] [--field=value ...]"
+            )
             return
 
         type_name = args[0]
@@ -240,7 +248,7 @@ class Repl:
         assert self.vault is not None
         result = commands.create_node(
             self.vault, type_name, title,
-            fields=extra_fields,
+            fields=extra_fields,  # type: ignore[arg-type]
             tags=tags if tags else None,
             add_path=add_path,
         )
@@ -287,7 +295,10 @@ class Repl:
                 i += 1
 
         if add_path is not None or remove_path is not None:
-            result = commands.edit_node(self.vault, uuid_arg, add_path=add_path, remove_path=remove_path)
+            result = commands.edit_node(
+                self.vault, uuid_arg,
+                add_path=add_path, remove_path=remove_path,
+            )
             if result.ok:
                 action = result.data.get("action", "")
                 path = result.data.get("path", "")
@@ -315,7 +326,9 @@ class Repl:
                 return
             new_size = os.stat(body_path).st_size
             new_sha256 = sha256_file(body_path)
-            result = commands.commit_body_edit(self.vault, uuid_arg, new_mtime, new_size, new_sha256)
+            result = commands.commit_body_edit(
+                self.vault, uuid_arg, new_mtime, new_size, new_sha256,
+            )
             if result.ok:
                 self._p("Body updated.")
                 self.last_uuid = uuid_arg
@@ -391,7 +404,7 @@ class Repl:
                 self._p("No path found.")
                 return
 
-            def _render(node: dict, prefix: str = "", is_last: bool = True) -> None:
+            def _render(node: dict[str, Any], prefix: str = "", is_last: bool = True) -> None:
                 name = node.get("name", node.get("uuid", "")[:8])
                 ref_count = node.get("ref_count", 0)
                 suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
@@ -402,7 +415,8 @@ class Repl:
                 for i, child in enumerate(children):
                     _render(child, child_prefix, i == len(children) - 1)
 
-            self._p(f"{tree_data['name']}{' (' + str(tree_data['ref_count']) + ' nodes)' if tree_data['ref_count'] > 0 else ''}")
+            suffix = f" ({tree_data['ref_count']} nodes)" if tree_data['ref_count'] > 0 else ""
+            self._p(f"{tree_data['name']}{suffix}")
             for i, child in enumerate(tree_data.get("children", [])):
                 _render(child, "", i == len(tree_data["children"]) - 1)
 
@@ -412,7 +426,11 @@ class Repl:
 
     def _cmd_tag(self, args: list[str]) -> None:
         if not args:
-            self._p("Usage: tag add <uuid> <tag> [<tag>...] | tag rm <uuid> <tag> [<tag>...] | tag list [--count] | tag rename <old> <new>")
+            self._p(
+                "Usage: tag add <uuid> <tag> [<tag>...] | "
+                "tag rm <uuid> <tag> [<tag>...] | "
+                "tag list [--count] | tag rename <old> <new>"
+            )
             return
         assert self.vault is not None
         sub = args[0].lower()
@@ -484,9 +502,11 @@ class Repl:
             self._p(f"Deleted node {result.data['uuid']}")
         elif result.code == "CONFIRM_REQUIRED":
             self._p(f"Warning: {result.error}")
-            self._output.write("Delete anyway? [y/N]: ")
-            self._output.flush()
-            confirm = self._input.readline().strip().lower()
+            out = self._output or sys.stdout
+            inp = self._input or sys.stdin
+            out.write("Delete anyway? [y/N]: ")
+            out.flush()
+            confirm = inp.readline().strip().lower()
             if confirm == "y":
                 result2 = commands.delete_node(self.vault, args[0], force=True)
                 if result2.ok:
@@ -567,7 +587,7 @@ class Repl:
         if result.ok:
             self._p(result.data["output"])
 
-    def _cmd_status(self, args: list[str]) -> None:
+    def _cmd_status(self, _args: list[str]) -> None:
         assert self.vault is not None
         result = commands.vault_status(self.vault)
         report = result.data
@@ -588,10 +608,12 @@ class Repl:
                 self._p(f"  {o['uuid']}")
         if not changed and not new_files and not orphaned:
             self._p("Vault is clean.")
+        out = self._output or sys.stdout
+        inp = self._input or sys.stdin
         for node in changed:
-            self._output.write(f"Re-extract links from changed note {node['uuid']}? [y/N]: ")
-            self._output.flush()
-            resp = self._input.readline().strip().lower()
+            out.write(f"Re-extract links from changed note {node['uuid']}? [y/N]: ")
+            out.flush()
+            resp = inp.readline().strip().lower()
             if resp == "y":
                 from prism.tracking import ChangeTracker
                 tracker = ChangeTracker(self.vault.path)
@@ -611,9 +633,11 @@ class Repl:
         result = commands.import_file(self.vault, source_path, type_name)
         if result.code == "ALREADY_EXISTS":
             self._p(f"File already exists as node {result.data['uuid']}")
-            self._output.write("Create a second reference? [y/N]: ")
-            self._output.flush()
-            confirm = self._input.readline().strip().lower()
+            out = self._output or sys.stdout
+            inp = self._input or sys.stdin
+            out.write("Create a second reference? [y/N]: ")
+            out.flush()
+            confirm = inp.readline().strip().lower()
             if confirm != "y":
                 return
             result = commands.import_file(self.vault, source_path, type_name, force=True)
@@ -642,9 +666,15 @@ class Repl:
             help_texts = {
                 "init": "Initialize a new vault at the given path.",
                 "open": "Open an existing vault.",
-                "new": "Create a new typed node. Usage: new <type> [title] [--tag <tag> ...] [--add-path <path>]",
+                "new": (
+                    "Create a new typed node. Usage: new <type> [title] "
+                    "[--tag <tag> ...] [--add-path <path>]"
+                ),
                 "show": "Display node details. Usage: show <uuid>",
-                "edit": "Edit a node's body or fields. Usage: edit <uuid> [--add-path <path>] [--remove-path <path>]",
+                "edit": (
+                    "Edit a node's body or fields. Usage: edit <uuid> "
+                    "[--add-path <path>] [--remove-path <path>]"
+                ),
                 "rm": "Delete a node. Usage: rm <uuid>",
                 "query": "Search nodes. Usage: query <query>",
                 "link": "Create a directed link. Usage: link <source> <target>",
@@ -653,8 +683,15 @@ class Repl:
                 "status": "Show vault status.",
                 "add-file": "Import a file. Usage: add-file <path> [--type <type>]",
                 "verify": "Verify blob integrity. Usage: verify <uuid>",
-                "tag": "Manage tags. Usage: tag add <uuid> <tag> [<tag>...] | tag rm <uuid> <tag> [<tag>...] | tag list [--count] | tag rename <old> <new>",
-                "path": "Manage path hierarchy. Usage: path create <path> | path rm <path> | path tree [<path>]",
+                "tag": (
+                    "Manage tags. Usage: tag add <uuid> <tag> [<tag>...] | "
+                    "tag rm <uuid> <tag> [<tag>...] | "
+                    "tag list [--count] | tag rename <old> <new>"
+                ),
+                "path": (
+                    "Manage path hierarchy. Usage: path create <path> | "
+                    "path rm <path> | path tree [<path>]"
+                ),
                 "history": "Show command history.",
                 "help": "Show this help message. Use 'help <command>' for specific help.",
                 "exit": "Exit the REPL.",
@@ -695,7 +732,7 @@ class Repl:
         self._p("Use 'help <command>' for detailed usage.")
         self._p("Use '_' in place of a UUID to reference the last used node.")
 
-    def _cmd_history(self, args: list[str]) -> None:
+    def _cmd_history(self, _args: list[str]) -> None:
         length = readline.get_current_history_length()
         for i in range(1, length):
             self._p(f"{i:4}  {readline.get_history_item(i)}")
@@ -704,7 +741,9 @@ class Repl:
         if state == 0:
             line = readline.get_line_buffer()
             parts = line.split()
-            self._completion_matches = completions.resolve_completions(parts, text, self.vault, ALIASES)
+            self._completion_matches = completions.resolve_completions(
+                parts, text, self.vault, ALIASES,
+            )
         try:
             return self._completion_matches[state]
         except IndexError:

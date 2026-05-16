@@ -6,12 +6,11 @@ and coordinates re-extraction of links and blob metadata.
 
 import os
 from datetime import datetime, timezone
-from typing import Optional
 
+from prism.graph.links import LinkExtractor
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path, sha256_file
-from prism.graph.links import LinkExtractor
 
 
 class ChangeTracker:
@@ -54,7 +53,8 @@ class ChangeTracker:
                             fs_uids.add(meta.uuid)
 
                             if meta.blob_mtime:
-                                body_path = os.path.join(root, f"data.{meta.blob_extension}") if meta.blob_extension else None
+                                ext = meta.blob_extension
+                                body_path = os.path.join(root, f"data.{ext}") if ext else None
                                 if body_path and os.path.exists(body_path):
                                     current_mtime = str(os.stat(body_path).st_mtime)
                                     if current_mtime != meta.blob_mtime:

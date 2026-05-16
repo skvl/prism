@@ -1,12 +1,11 @@
 import os
 import shutil
 import tempfile
+import uuid
 
 import pytest
 
-from prism.node.storage import sha256_file, compute_storage_path, StorageEngine
-from prism.vault.vault import uuid_to_path
-import uuid
+from prism.node.storage import StorageEngine, compute_storage_path, sha256_file
 
 
 class TestStorageEngine:

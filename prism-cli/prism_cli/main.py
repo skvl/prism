@@ -7,16 +7,15 @@ import json
 import os
 import subprocess
 import sys
-from typing import Optional
+from typing import Any, Optional
 
 import click
-
 from prism import VERSION
 from prism.node.manager import NodeManager, resolve_uuid
 from prism.node.storage import sha256_file
 from prism.path.resolver import PathResolver
-from prism.vault.vault import Vault
 from prism.vault.context import detect_vault
+from prism.vault.vault import Vault
 
 from . import commands
 from .repl import Repl
@@ -26,7 +25,11 @@ from .tutor import Tutor
 @click.group()
 @click.option("--vault", "-v", default=None, help="Path to vault directory")
 @click.option("--verbose", is_flag=True, help="Enable verbose output")
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table", help="Output format",
+)
 @click.version_option(VERSION, prog_name="prism")
 @click.pass_context
 def cli(ctx: click.Context, vault: Optional[str], verbose: bool, output_format: str) -> None:
@@ -49,8 +52,7 @@ def cli(ctx: click.Context, vault: Optional[str], verbose: bool, output_format: 
 
 @cli.command()
 @click.argument("path", default=".")
-@click.pass_context
-def init(ctx: click.Context, path: str) -> None:
+def init(path: str) -> None:
     """Initialize a new vault at PATH."""
     result = commands.init_vault(path)
     if result.ok:
@@ -61,9 +63,8 @@ def init(ctx: click.Context, path: str) -> None:
         sys.exit(1)
 
 
-@cli.group()
-@click.pass_context
-def path_cmd(ctx: click.Context) -> None:
+@cli.group(name="path")
+def path_cmd() -> None:
     """Manage path hierarchy."""
 
 
@@ -85,11 +86,11 @@ def create(ctx: click.Context, path_str: str) -> None:
         sys.exit(1)
 
 
-@path_cmd.command()
+@path_cmd.command(name="rm")
 @click.argument("path_str")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
 @click.pass_context
-def rm(ctx: click.Context, path_str: str, yes: bool) -> None:
+def path_rm(ctx: click.Context, path_str: str, yes: bool) -> None:
     """Remove a path segment and its subtree."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
@@ -156,7 +157,7 @@ def tree(ctx: click.Context, path_str: str) -> None:
         click.echo("No path found.")
         return
 
-    def _render(node: dict, prefix: str = "", is_last: bool = True) -> None:
+    def _render(node: dict[str, Any], prefix: str = "", is_last: bool = True) -> None:
         name = node.get("name", node.get("uuid", "")[:8])
         ref_count = node.get("ref_count", 0)
         suffix = f" ({ref_count} nodes)" if ref_count > 0 else ""
@@ -167,14 +168,14 @@ def tree(ctx: click.Context, path_str: str) -> None:
         for i, child in enumerate(children):
             _render(child, child_prefix, i == len(children) - 1)
 
-    click.echo(f"{tree_data['name']}{' (' + str(tree_data['ref_count']) + ' nodes)' if tree_data['ref_count'] > 0 else ''}")
+    suffix = f" ({tree_data['ref_count']} nodes)" if tree_data['ref_count'] > 0 else ""
+    click.echo(f"{tree_data['name']}{suffix}")
     for i, child in enumerate(tree_data.get("children", [])):
         _render(child, "", i == len(tree_data["children"]) - 1)
 
 
 @cli.group()
-@click.pass_context
-def tag(ctx: click.Context) -> None:
+def tag() -> None:
     """Manage tags on nodes."""
 
 
@@ -202,11 +203,11 @@ def add(ctx: click.Context, uuid: str, tags: tuple[str, ...]) -> None:
             sys.exit(1)
 
 
-@tag.command()
+@tag.command(name="rm")
 @click.argument("uuid")
 @click.argument("tags", nargs=-1, required=True)
 @click.pass_context
-def rm(ctx: click.Context, uuid: str, tags: tuple[str, ...]) -> None:
+def tag_rm(ctx: click.Context, uuid: str, tags: tuple[str, ...]) -> None:
     """Remove one or more tags from a node."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
@@ -262,16 +263,14 @@ def rename(ctx: click.Context, old_tag: str, new_tag: str) -> None:
         sys.exit(1)
 
 
-@cli.group()
-@click.pass_context
-def vault(ctx: click.Context) -> None:
+@cli.group(name="vault")
+def vault_group() -> None:
     """Manage vaults."""
 
 
-@vault.command()
+@vault_group.command(name="add")
 @click.argument("path")
-@click.pass_context
-def add(ctx: click.Context, path: str) -> None:
+def vault_add(path: str) -> None:
     """Register an existing vault."""
     result = commands.add_vault(path)
     if result.ok:
@@ -281,9 +280,8 @@ def add(ctx: click.Context, path: str) -> None:
         sys.exit(1)
 
 
-@vault.command()
-@click.pass_context
-def list_vaults(ctx: click.Context) -> None:
+@vault_group.command()
+def list_vaults() -> None:
     """List registered vaults."""
     result = commands.list_vaults()
     vaults = result.data.get("vaults", [])
@@ -342,7 +340,10 @@ def add_file(ctx: click.Context, source_path: str, type_name: Optional[str]) -> 
 @click.option("--tag", "-t", "tags", multiple=True, help="Tags to add")
 @click.option("--add-path", "-a", "add_path", default=None, help="Associate node with a path")
 @click.pass_context
-def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...], add_path: Optional[str]) -> None:
+def new(
+    ctx: click.Context, type_name: str, title: str,
+    tags: tuple[str, ...], add_path: Optional[str],
+) -> None:
     """Create a new typed node."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
@@ -382,7 +383,10 @@ def new(ctx: click.Context, type_name: str, title: str, tags: tuple[str, ...], a
         sys.exit(1)
 
 
-def _do_edit_path_ops(vault: Vault, uuid: str, add_path: Optional[str], remove_path: Optional[str]) -> bool:
+def _do_edit_path_ops(
+    vault: Vault, uuid: str,
+    add_path: Optional[str], remove_path: Optional[str],
+) -> bool:
     """Handle add/remove path operations. Returns True if a path op was handled."""
     if add_path is not None or remove_path is not None:
         result = commands.edit_node(vault, uuid, add_path=add_path, remove_path=remove_path)
@@ -409,7 +413,10 @@ def _do_edit_path_ops(vault: Vault, uuid: str, add_path: Optional[str], remove_p
 @click.option("--add-path", "-a", "add_path", default=None, help="Associate node with a path")
 @click.option("--remove-path", "-r", "remove_path", default=None, help="Remove node from a path")
 @click.pass_context
-def edit(ctx: click.Context, uuid: str, add_path: Optional[str], remove_path: Optional[str]) -> None:
+def edit(
+    ctx: click.Context, uuid: str,
+    add_path: Optional[str], remove_path: Optional[str],
+) -> None:
     """Edit a node's body or fields."""
     vault: Optional[Vault] = ctx.obj.get("vault")
     if vault is None:
@@ -450,7 +457,8 @@ def edit(ctx: click.Context, uuid: str, add_path: Optional[str], remove_path: Op
         for field_def in schema.fields:
             current = current_values.get(field_def.name, "")
             try:
-                new_val = input(f"Enter new {field_def.name} or press ENTER to keep [{current}]: ").strip()
+                prompt = f"Enter new {field_def.name} or press ENTER to keep [{current}]: "
+                new_val = input(prompt).strip()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
@@ -565,13 +573,19 @@ def backlinks(ctx: click.Context, uuid: str) -> None:
         click.echo("No backlinks found.")
         return
 
-    for link in links:
-        click.echo(f"  {link['uuid'][:8]}  {link.get('title', '?')}  ({link.get('type', '?')})")
+    for bl in links:
+        click.echo(f"  {bl['uuid'][:8]}  {bl.get('title', '?')}  ({bl.get('type', '?')})")
 
 
 @cli.command()
-@click.option("--format", "output_format", type=click.Choice(["dot", "json"]), default="dot", help="Graph format")
-@click.option("--include-paths", "-p", is_flag=True, default=False, help="Include path nodes in export")
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["dot", "json"]), default="dot", help="Graph format",
+)
+@click.option(
+    "--include-paths", "-p", is_flag=True, default=False,
+    help="Include path nodes in export",
+)
 @click.pass_context
 def graph(ctx: click.Context, output_format: str, include_paths: bool) -> None:
     """Export the node graph."""
@@ -586,7 +600,10 @@ def graph(ctx: click.Context, output_format: str, include_paths: bool) -> None:
 
 @cli.command()
 @click.argument("query_str")
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["table", "json"]), default="table", help="Output format",
+)
 @click.pass_context
 def query(ctx: click.Context, query_str: str, output_format: str) -> None:
     """Search nodes by tags, type, and text."""
@@ -722,7 +739,8 @@ def repl(ctx: click.Context, vault: Optional[str]) -> None:
 
 def main() -> None:
     """Entry point for the CLI. Delegates to the Click group."""
-    cli()
+    cli()  # pylint: disable=no-value-for-parameter
+
 
 if __name__ == "__main__":
     main()

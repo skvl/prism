@@ -4,7 +4,7 @@ Provides completions for commands, UUIDs, type names, tags, and paths
 for use with readline in the interactive REPL session.
 """
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from prism.node.manager import NodeManager
 from prism.path.resolver import PathResolver
@@ -40,7 +40,7 @@ def complete_command(text: str, aliases: dict[str, str]) -> list[str]:
     return [c for c in all_commands if c.startswith(text)]
 
 
-def complete_uuid(vault: Optional[object], text: str) -> list[str]:
+def complete_uuid(vault: Optional[Any], text: str) -> list[str]:
     """Complete a UUID from the given prefix.
 
     Args:
@@ -55,14 +55,14 @@ def complete_uuid(vault: Optional[object], text: str) -> list[str]:
     manager = NodeManager(vault.path)
     try:
         nodes = manager.list_nodes()
-    except Exception:
+    except (ValueError, OSError):
         return []
     if not text:
         return [n.uuid for n in nodes]
     return [n.uuid for n in nodes if n.uuid.startswith(text)]
 
 
-def complete_type_name(vault: Optional[object], text: str) -> list[str]:
+def complete_type_name(vault: Optional[Any], text: str) -> list[str]:
     """Complete a node type name from the given prefix.
 
     Args:
@@ -83,7 +83,7 @@ def complete_type_name(vault: Optional[object], text: str) -> list[str]:
     return [n for n in names if n.startswith(text)]
 
 
-def complete_tag(vault: Optional[object], text: str) -> list[str]:
+def complete_tag(vault: Optional[Any], text: str) -> list[str]:
     """Complete a tag name from the given prefix.
 
     Args:
@@ -100,14 +100,14 @@ def complete_tag(vault: Optional[object], text: str) -> list[str]:
     try:
         for node in manager.list_nodes():
             tags.update(node.tags)
-    except Exception:
+    except (ValueError, OSError):
         return []
     if not text:
         return sorted(tags)
     return sorted(t for t in tags if t.startswith(text))
 
 
-def complete_path(vault: Optional[object], text: str) -> list[str]:
+def complete_path(vault: Optional[Any], text: str) -> list[str]:
     """Complete a path segment from the given prefix.
 
     Args:
@@ -125,7 +125,7 @@ def complete_path(vault: Optional[object], text: str) -> list[str]:
     resolver = PathResolver(vault.path)
     try:
         completions = resolver.complete(path_prefix)
-    except Exception:
+    except (ValueError, OSError):
         return []
     if text.startswith("path:"):
         return [f"path:{p}" for p in completions]
@@ -135,7 +135,7 @@ def complete_path(vault: Optional[object], text: str) -> list[str]:
 def resolve_completions(
     parts: list[str],
     text: str,
-    vault: Optional[object],
+    vault: Optional[Any],
     aliases: dict[str, str],
 ) -> list[str]:
     """Resolve completions based on command context.

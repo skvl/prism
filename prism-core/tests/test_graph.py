@@ -26,7 +26,10 @@ class TestLinkExtractor:
         assert links[0].get("vault") == "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
 
     def test_extract_multiple_links(self):
-        body = "[[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]] and [[f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f]]"
+        body = (
+            "[[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]] "
+            "and [[f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f]]"
+        )
         links = LinkExtractor.extract_links(body)
         assert len(links) == 2
 
@@ -36,7 +39,10 @@ class TestLinkExtractor:
         assert len(links) == 0
 
     def test_duplicate_links_deduped(self):
-        body = "[[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]] and again [[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]]"
+        body = (
+            "[[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]] "
+            "and again [[a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d]]"
+        )
         links = LinkExtractor.extract_links(body)
         assert len(links) == 1
 
@@ -53,8 +59,6 @@ class TestGraphExporter:
         finally:
             os.unlink(tmp)
 
-
-class TestGraphExporter:
     def test_dot_export(self):
         nodes = [
             NodeMetadata(uuid="a1b2", type="note", title="Note A"),
@@ -182,7 +186,9 @@ class TestResolveCrossVaultLink:
         reg = VaultRegistry()
         vault = Vault.open(d)
         reg.add(vault.vault_uuid, d)
-        result = GraphExporter.resolve_cross_vault_link(vault.vault_uuid, "00000000-0000-0000-0000-000000000000")
+        result = GraphExporter.resolve_cross_vault_link(
+            vault.vault_uuid, "00000000-0000-0000-0000-000000000000"
+        )
         assert result is None
 
     def test_resolve_corrupt_target_metadata(self, vault_dir, monkeypatch):

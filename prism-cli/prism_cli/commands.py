@@ -9,16 +9,16 @@ import shutil
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from prism.graph.links import BacklinkIndex, GraphExporter
 from prism.node.manager import NodeManager, resolve_uuid
 from prism.node.metadata import NodeMetadata
 from prism.node.storage import compute_storage_path, sha256_file
-from prism.graph.links import BacklinkIndex, GraphExporter
 from prism.path.resolver import PathResolver
-from prism.query.parser import QueryParser
 from prism.query.engine import QueryEngine
+from prism.query.parser import QueryParser
 from prism.tracking import ChangeTracker
-from prism.vault.vault import Vault
 from prism.vault.registry import VaultRegistry
+from prism.vault.vault import Vault
 
 
 @dataclass
@@ -34,12 +34,12 @@ class CmdResult:
     ok: bool
     error: str = ""
     code: str = ""
-    data: dict = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 def write_builtin_types(vault: Vault) -> CmdResult:
     """Write built-in type definitions to a vault's types directory."""
-    from prism.types.builtins import NOTE_TOML, CONTACT_TOML, BOOKMARK_TOML, FILE_TOML, PATH_TOML
+    from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML, PATH_TOML
 
     types_dir = os.path.join(vault.path, ".metadata", "types")
     os.makedirs(types_dir, exist_ok=True)
@@ -56,7 +56,7 @@ def write_builtin_types(vault: Vault) -> CmdResult:
     for fname, content in types.items():
         path = os.path.join(types_dir, fname)
         if not os.path.exists(path):
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
             created.append(fname)
         else:
@@ -182,7 +182,10 @@ def verify_node(vault: Vault, uuid: str) -> CmdResult:
     return CmdResult(ok=False, error="CORRUPTED", code="CORRUPTED", data={})
 
 
-def export_graph(vault: Vault, output_format: str = "dot", include_paths: bool = False) -> CmdResult:
+def export_graph(
+    vault: Vault, output_format: str = "dot",
+    include_paths: bool = False,
+) -> CmdResult:
     """Export the node graph in DOT or JSON format.
 
     Args:
@@ -238,7 +241,7 @@ def query_nodes(vault: Vault, query_str: str) -> CmdResult:
     parser = QueryParser()
     try:
         ast = parser.parse(query_str)
-    except Exception as e:
+    except (ValueError, SyntaxError) as e:
         return CmdResult(ok=False, error=str(e), code="PARSE_ERROR", data={})
     engine = QueryEngine(vault.path)
     results = engine.execute(ast)
@@ -520,7 +523,10 @@ def link_nodes(vault: Vault, source_uuid: str, target_uuid: str) -> CmdResult:
     target = next((n for n in all_nodes if n.uuid == full_target), None)
 
     if source is None:
-        return CmdResult(ok=False, error=f"Source node not found: {source_uuid}", code="NOT_FOUND", data={})
+        return CmdResult(
+            ok=False, error=f"Source node not found: {source_uuid}",
+            code="NOT_FOUND", data={},
+        )
 
     warning = None
     if target is None:
@@ -536,13 +542,16 @@ def link_nodes(vault: Vault, source_uuid: str, target_uuid: str) -> CmdResult:
                     if meta.uuid == full_source:
                         meta_path = os.path.join(root, fname)
                         break
-                except Exception:
+                except (ValueError, OSError):
                     continue
         if meta_path:
             break
 
     if meta_path is None:
-        return CmdResult(ok=False, error=f"Could not find metadata for {source_uuid}", code="NOT_FOUND", data={})
+        return CmdResult(
+            ok=False, error=f"Could not find metadata for {source_uuid}",
+            code="NOT_FOUND", data={},
+        )
 
     source_meta = NodeMetadata.from_toml(meta_path)
     link_entry = {
@@ -584,7 +593,10 @@ def import_file(
     """
     source_path = os.path.abspath(source_path)
     if not os.path.exists(source_path):
-        return CmdResult(ok=False, error=f"File not found: {source_path}", code="NOT_FOUND", data={})
+        return CmdResult(
+            ok=False, error=f"File not found: {source_path}",
+            code="NOT_FOUND", data={},
+        )
 
     file_hash = sha256_file(source_path)
     manager = NodeManager(vault.path)
@@ -628,7 +640,10 @@ def manage_tags(
 
     if action == "add":
         if not uuid or not tags:
-            return CmdResult(ok=False, error="Usage: tag add <uuid> <tag> [<tag>...]", code="USAGE", data={})
+            return CmdResult(
+                ok=False, error="Usage: tag add <uuid> <tag> [<tag>...]",
+                code="USAGE", data={},
+            )
         try:
             full_uuid = resolve_uuid(vault.path, uuid)
         except ValueError as e:
@@ -647,7 +662,10 @@ def manage_tags(
 
     elif action == "rm":
         if not uuid or not tags:
-            return CmdResult(ok=False, error="Usage: tag rm <uuid> <tag> [<tag>...]", code="USAGE", data={})
+            return CmdResult(
+                ok=False, error="Usage: tag rm <uuid> <tag> [<tag>...]",
+                code="USAGE", data={},
+            )
         try:
             full_uuid = resolve_uuid(vault.path, uuid)
         except ValueError as e:
@@ -667,15 +685,27 @@ def manage_tags(
 
     elif action == "rename":
         if not tags or len(tags) < 2:
-            return CmdResult(ok=False, error="Usage: tag rename <old-tag> <new-tag>", code="USAGE", data={})
+            return CmdResult(
+                ok=False, error="Usage: tag rename <old-tag> <new-tag>",
+                code="USAGE", data={},
+            )
         old_tag, new_tag = tags[0], tags[1]
         try:
             affected = manager.rename_tag(old_tag, new_tag)
-            return CmdResult(ok=True, data={"action": "rename", "old_tag": old_tag, "new_tag": new_tag, "affected": affected})
+            return CmdResult(
+                ok=True,
+                data={
+                    "action": "rename", "old_tag": old_tag,
+                    "new_tag": new_tag, "affected": affected,
+                },
+            )
         except ValueError as e:
             return CmdResult(ok=False, error=str(e), code="VALIDATION_ERROR", data={})
 
-    return CmdResult(ok=False, error=f"Unknown tag action: {action}", code="UNKNOWN_ACTION", data={})
+    return CmdResult(
+        ok=False, error=f"Unknown tag action: {action}",
+        code="UNKNOWN_ACTION", data={},
+    )
 
 
 def manage_paths(
@@ -700,7 +730,9 @@ def manage_paths(
             return CmdResult(ok=False, error="Usage: path create <path>", code="USAGE", data={})
         try:
             leaf_uuid = resolver.resolve_or_create(path_str)
-            return CmdResult(ok=True, data={"action": "create", "path": path_str, "leaf_uuid": leaf_uuid})
+            return CmdResult(
+                ok=True, data={"action": "create", "path": path_str, "leaf_uuid": leaf_uuid},
+            )
         except ValueError as e:
             return CmdResult(ok=False, error=str(e), code="VALIDATION_ERROR", data={})
 
@@ -741,7 +773,7 @@ def manage_paths(
         except ValueError as e:
             return CmdResult(ok=False, error=str(e), code="NOT_FOUND", data={})
 
-        nodes = resolver._all_nodes()
+        nodes = resolver.all_nodes()
         nodes_by_uuid = {n.uuid: n for n in nodes}
 
         def _count_referencing(uuid: str) -> int:
@@ -754,7 +786,7 @@ def manage_paths(
             name = node.fields.get("name", node.title or uuid[:8])
             ref_count = _count_referencing(uuid)
             children = sorted(
-                resolver._find_children(uuid, nodes),
+                resolver.find_children(uuid, nodes),
                 key=lambda c: c.fields.get("name", ""),
             )
             return {
@@ -777,11 +809,14 @@ def manage_paths(
             "children": [],
         }
         children = sorted(
-            resolver._find_children(root_uuid, nodes),
+            resolver.find_children(root_uuid, nodes),
             key=lambda c: c.fields.get("name", ""),
         )
         tree["children"] = [_build_tree(c.uuid) for c in children]
 
         return CmdResult(ok=True, data={"action": "tree", "tree": tree})
 
-    return CmdResult(ok=False, error=f"Unknown path action: {action}", code="UNKNOWN_ACTION", data={})
+    return CmdResult(
+        ok=False, error=f"Unknown path action: {action}",
+        code="UNKNOWN_ACTION", data={},
+    )
