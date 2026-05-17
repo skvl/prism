@@ -1043,6 +1043,31 @@ class TestHelperFunctions:
             assert os.path.exists(os.path.join(types_dir, tname))
 
 
+# ── TUI bridge command ─────────────────────────────────────────────────
+
+
+class TestTuiBridge:
+    def test_tui_command_invocation(self, runner):
+        result = runner.invoke(cli, ["tui", "--help"])
+        assert result.exit_code == 0
+        assert "TUI" in result.output or "tui" in result.output
+
+    def test_tui_command_with_vault_flag(self, runner, vault_dir):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            result = runner.invoke(cli, ["tui", "--vault", vault_dir])
+            assert result.exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert vault_dir in args
+
+    def test_tui_command_passes_return_code(self, runner):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 42
+            result = runner.invoke(cli, ["tui"])
+            assert result.exit_code == 42
+
+
 # ── __main__ block ─────────────────────────────────────────────────────
 
 

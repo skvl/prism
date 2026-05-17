@@ -90,6 +90,30 @@ class TestVaultLifecycle:
         Vault.init(temp_dir)
         assert os.path.exists(os.path.join(temp_dir, ".metadata"))
 
+    def test_init_writes_builtin_types(self, temp_dir):
+        Vault.init(temp_dir)
+        types_dir = Path(temp_dir) / ".metadata" / "types"
+        expected = {"note.toml", "contact.toml", "bookmark.toml", "file.toml"}
+        actual = {f.name for f in types_dir.iterdir() if f.suffix == ".toml"}
+        missing = expected - actual
+        assert not missing, f"Missing builtin type files: {missing}"
+        assert "path.toml" not in actual, "path type should not be written during init"
+        for name in expected:
+            content = (types_dir / name).read_text()
+            assert "name" in content, f"{name} should contain 'name' key"
+
+    def test_init_types_are_parseable(self, temp_dir):
+        Vault.init(temp_dir)
+        from prism.types.loader import TypeLoader
+
+        loader = TypeLoader(str(Path(temp_dir) / ".metadata" / "types"))
+        types = loader.load_all()
+        assert "note" in types
+        assert "contact" in types
+        assert "bookmark" in types
+        assert "file" in types
+        assert "path" not in types
+
 
 class TestVaultRegistry:
     @pytest.fixture

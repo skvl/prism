@@ -12,6 +12,7 @@ from pathlib import Path
 import tomlkit
 
 from prism import VERSION
+from prism.types.builtins import BOOKMARK_TOML, CONTACT_TOML, FILE_TOML, NOTE_TOML
 
 
 def generate_uuid() -> uuid.UUID:
@@ -102,7 +103,15 @@ class Vault:
             print("Warning: directory is not empty. Existing files are not managed.")
 
         metadata_dir.mkdir(parents=True, exist_ok=True)
-        (metadata_dir / "types").mkdir(parents=True, exist_ok=True)
+        types_dir = metadata_dir / "types"
+        types_dir.mkdir(parents=True, exist_ok=True)
+        for name, content in [
+            ("note", NOTE_TOML),
+            ("contact", CONTACT_TOML),
+            ("bookmark", BOOKMARK_TOML),
+            ("file", FILE_TOML),
+        ]:
+            (types_dir / f"{name}.toml").write_text(content)
         storage_dir.mkdir(parents=True, exist_ok=True)
         (metadata_dir / "index.txt").touch()
 

@@ -1,0 +1,67 @@
+"""Tests for force-directed layout as a pure function."""
+
+import math
+
+from prism_tui.tabs.graph import ForceDirectedLayout
+
+from prism.node.metadata import NodeMetadata
+
+
+def _make_node(uuid: str, title: str = "") -> NodeMetadata:
+    return NodeMetadata(
+        uuid=uuid,
+        type="note",
+        title=title or uuid[:8],
+    )
+
+
+def test_layout_returns_positions_for_all_nodes() -> None:
+    nodes = [_make_node("a"), _make_node("b"), _make_node("c")]
+    links = [{"source": "a", "target": "b"}]
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(10)
+    assert len(layout.positions) == 3
+    for uid in ("a", "b", "c"):
+        assert uid in layout.positions
+        x, y = layout.positions[uid]
+        assert isinstance(x, float)
+        assert isinstance(y, float)
+
+
+def test_layout_separates_overlapping_nodes() -> None:
+    nodes = [_make_node("a"), _make_node("b")]
+    links: list[dict[str, str]] = []
+    layout = ForceDirectedLayout(nodes, links)
+    original_positions = dict(layout.positions)
+    layout.tick(100)
+    assert layout.positions["a"] != layout.positions["b"]
+
+
+def test_linked_nodes_attract() -> None:
+    nodes = [_make_node("a"), _make_node("b")]
+    links = [{"source": "a", "target": "b"}]
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(100)
+    ax, ay = layout.positions["a"]
+    bx, by = layout.positions["b"]
+    dist = math.sqrt((bx - ax) ** 2 + (by - ay) ** 2)
+    assert dist < 50
+
+
+def test_render_ascii_contains_node_labels() -> None:
+    nodes = [_make_node("abc-123", "TestNode")]
+    links: list[dict[str, str]] = []
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(10)
+    output = layout.render_ascii()
+    assert "TestNode" in output or "Test" in output
+
+
+def test_render_ascii_marks_selected_node() -> None:
+    nodes = [_make_node("sel-uuid")]
+    links: list[dict[str, str]] = []
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(10)
+    output_selected = layout.render_ascii(selected="sel-uuid")
+    output_unselected = layout.render_ascii(selected=None)
+    assert output_selected != output_unselected

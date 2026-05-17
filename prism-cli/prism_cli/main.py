@@ -821,6 +821,18 @@ def tutor(lesson: int) -> None:
 @cli.command()
 @click.option("--vault", "-v", default=None, help="Path to vault directory")
 @click.pass_context
+def tui(ctx: click.Context, vault: Optional[str]) -> None:
+    """Launch the Textual TUI application."""
+    args = [sys.executable, "-m", "prism_tui"]
+    if vault:
+        args.extend(["--vault", vault])
+    result = subprocess.run(args)
+    sys.exit(result.returncode)
+
+
+@cli.command()
+@click.option("--vault", "-v", default=None, help="Path to vault directory")
+@click.pass_context
 def repl(ctx: click.Context, vault: Optional[str]) -> None:
     """Launch an interactive REPL session."""
     current_vault = ctx.obj.get("vault")
