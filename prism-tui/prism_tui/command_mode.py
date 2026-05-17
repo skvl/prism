@@ -59,10 +59,7 @@ class NewNodeWizard(ModalScreen[dict | None]):
         self._schemas = type_loader.load_all()
 
     def compose(self) -> ComposeResult:
-        types_dir = os.path.join(self._vault.path, ".metadata", "types")
-        type_loader = TypeLoader(types_dir)
-        types = type_loader.load_all()
-        type_options = [(t.name, t.name) for t in types.values() if t.name != "path"]
+        type_options = [(t.name, t.name) for t in self._schemas.values() if t.name != "path"]
 
         with Vertical(id="dialog"):
             yield Label("Create New Node", id="title")
