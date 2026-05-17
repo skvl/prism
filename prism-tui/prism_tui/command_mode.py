@@ -33,6 +33,10 @@ class NewNodeWizard(ModalScreen[dict | None]):
         margin-top: 1;
     }
 
+    .field-label {
+        margin-top: 1;
+    }
+
     Input, Select {
         width: 100%;
     }
@@ -50,6 +54,9 @@ class NewNodeWizard(ModalScreen[dict | None]):
     def __init__(self, vault: Vault) -> None:
         super().__init__()
         self._vault = vault
+        types_dir = os.path.join(vault.path, ".metadata", "types")
+        type_loader = TypeLoader(types_dir)
+        self._schemas = type_loader.load_all()
 
     def compose(self) -> ComposeResult:
         types_dir = os.path.join(self._vault.path, ".metadata", "types")
@@ -65,9 +72,27 @@ class NewNodeWizard(ModalScreen[dict | None]):
             yield Input(placeholder="Node title", id="title-input")
             yield Label("Tags (comma separated):")
             yield Input(placeholder="tag1, tag2, ...", id="tags-input")
+            yield Vertical(id="type-fields")
             with Horizontal(id="wizard-buttons"):
                 yield Button("Create", variant="primary", id="create-btn")
                 yield Button("Cancel", id="cancel-btn")
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "type-select":
+            type_name = event.value
+            container = self.query_one("#type-fields", Vertical)
+            container.remove_children()
+            if type_name is None or type_name not in self._schemas:
+                return
+            schema = self._schemas[type_name]
+            for field in schema.fields:
+                if field.name in ("title", "tags"):
+                    continue
+                label = Label(field.name.capitalize())
+                label.classes = "field-label"
+                inp = Input(placeholder=field.name, id=f"field-{field.name}")
+                container.mount(label)
+                container.mount(inp)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
@@ -83,10 +108,20 @@ class NewNodeWizard(ModalScreen[dict | None]):
                 self.notify("Please enter a title", severity="error")
                 return
             tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+
+            fields: dict[str, str] = {}
+            for widget in self.query("#type-fields Input"):
+                if isinstance(widget, Input) and widget.id and widget.id.startswith("field-"):
+                    field_name = widget.id.replace("field-", "", 1)
+                    val = widget.value.strip()
+                    if val:
+                        fields[field_name] = val
+
             self.dismiss({
                 "type": type_name,
                 "title": title,
                 "tags": tags,
+                "fields": fields or None,
             })
 
 
@@ -269,7 +304,10 @@ def _on_new_node_result(result: dict | None, vault: Vault, notify: Callable) -> 
     try:
         manager = NodeManager(vault.path)
         node = manager.create_node(
-            result["type"], title=result["title"], tags=result["tags"] or None
+            result["type"],
+            title=result["title"],
+            tags=result["tags"] or None,
+            fields=result.get("fields"),
         )
         notify(f"Created {result['type']} node: {node.uuid[:8]}", severity="success")
     except Exception as e:
