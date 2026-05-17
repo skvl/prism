@@ -202,7 +202,7 @@ class TagManageWizard(ModalScreen[dict | None]):
 def execute_command(
     cmd_str: str,
     vault: Vault,
-    notify: Callable[[str, str], object],
+    notify: Callable[..., object],
     push_screen: Callable,
 ) -> str | None:
     try:
@@ -251,7 +251,6 @@ def execute_command(
             for tag in args[1:]:
                 manager.add_tag(uid, tag)
             return f"Added tags to {uid[:8]}"
-            return f"Added tags to {uuid[:8]}"
         elif cmd == "help":
             return "Commands: new, link, tag, help, quit"
         elif cmd in ("quit", "exit", "q"):
@@ -272,9 +271,9 @@ def _on_new_node_result(result: dict | None, vault: Vault, notify: Callable) -> 
         node = manager.create_node(
             result["type"], title=result["title"], tags=result["tags"] or None
         )
-        notify(f"Created {result['type']} node: {node.uuid[:8]}", "success")
+        notify(f"Created {result['type']} node: {node.uuid[:8]}", severity="success")
     except Exception as e:
-        notify(str(e), "error")
+        notify(str(e), severity="error")
 
 
 def _on_link_result(result: dict | None, vault: Vault, notify: Callable) -> None:
@@ -283,9 +282,9 @@ def _on_link_result(result: dict | None, vault: Vault, notify: Callable) -> None
     try:
         extractor = LinkExtractor(vault.path)
         extractor.add_link(result["source"], result["target"])
-        notify(f"Linked {result['source'][:8]} -> {result['target'][:8]}", "success")
+        notify(f"Linked {result['source'][:8]} -> {result['target'][:8]}", severity="success")
     except Exception as e:
-        notify(str(e), "error")
+        notify(str(e), severity="error")
 
 
 def _add_link(vault_path: str, source_uuid: str, target_uuid: str) -> None:
@@ -302,6 +301,6 @@ def _on_tag_result(result: dict | None, vault: Vault, notify: Callable) -> None:
     try:
         manager = NodeManager(vault.path)
         for tag in result["tags"]:
-            notify(f"Tag: {tag}", "information")
+            notify(f"Tag: {tag}", severity="information")
     except Exception as e:
-        notify(str(e), "error")
+        notify(str(e), severity="error")
