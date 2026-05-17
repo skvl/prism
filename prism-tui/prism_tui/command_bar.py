@@ -7,13 +7,6 @@ from textual.widgets import Button, Static
 
 class CommandBar(Static):
     CSS = """
-    CommandBar {
-        height: 3;
-        dock: bottom;
-        background: $surface;
-        border-top: solid $primary;
-    }
-
     CommandBar Horizontal {
         height: 3;
     }

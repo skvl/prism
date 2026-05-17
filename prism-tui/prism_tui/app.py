@@ -6,6 +6,7 @@ import os
 from prism.vault.context import detect_vault
 from prism.vault.vault import Vault
 from textual.app import App, ComposeResult
+from textual.containers import Vertical
 from textual.events import Key
 from textual.widgets import Header, Input, TabbedContent, TabPane
 
@@ -24,8 +25,8 @@ class PrismTui(App):
     SUB_TITLE = "Personal Knowledge Manager"
 
     CSS = """
-    Screen {
-        layers: base overlay;
+    #main-content {
+        height: 1fr;
     }
 
     TabbedContent {
@@ -38,8 +39,15 @@ class PrismTui(App):
         margin: 0 0;
     }
 
-    #command-input.-active {
+    #command-input.active {
         display: block;
+    }
+
+    CommandBar {
+        height: 3;
+        dock: bottom;
+        background: $surface;
+        border-top: solid $primary;
     }
     """
 
@@ -63,16 +71,17 @@ class PrismTui(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with TabbedContent(initial="tab-browser", id="tab-container"):
-            with TabPane("Browser", id="tab-browser"):
-                yield BrowserTab(vault=self._vault)
-            with TabPane("Graph", id="tab-graph"):
-                yield GraphTab(vault=self._vault)
-            with TabPane("Tag Cloud", id="tab-tags"):
-                yield TagCloudTab(vault=self._vault)
-            with TabPane("Query", id="tab-query"):
-                yield QueryBuilderTab(vault=self._vault)
-        yield Input(id="command-input", placeholder=": ")
+        with Vertical(id="main-content"):
+            with TabbedContent(initial="tab-browser", id="tab-container"):
+                with TabPane("Browser", id="tab-browser"):
+                    yield BrowserTab(vault=self._vault)
+                with TabPane("Graph", id="tab-graph"):
+                    yield GraphTab(vault=self._vault)
+                with TabPane("Tag Cloud", id="tab-tags"):
+                    yield TagCloudTab(vault=self._vault)
+                with TabPane("Query", id="tab-query"):
+                    yield QueryBuilderTab(vault=self._vault)
+            yield Input(id="command-input", placeholder=": ")
         yield CommandBar(vault=self._vault)
 
     def on_mount(self) -> None:
@@ -106,14 +115,14 @@ class PrismTui(App):
     def _enter_command_mode(self) -> None:
         self._in_command_mode = True
         cmd_input = self.query_one("#command-input", Input)
-        cmd_input.add_class("-active")
+        cmd_input.add_class("active")
         cmd_input.value = ""
         cmd_input.focus()
 
     def _exit_command_mode(self) -> None:
         self._in_command_mode = False
         cmd_input = self.query_one("#command-input", Input)
-        cmd_input.remove_class("-active")
+        cmd_input.remove_class("active")
 
     def action_enter_command_mode(self) -> None:
         self._enter_command_mode()
