@@ -140,12 +140,12 @@ async def test_colon_via_shift_semicolon_enters_command_mode(vault: Vault) -> No
         await pilot.pause()
 
         cmd_input = app.query_one("#command-input", Input)
-        assert not cmd_input.has_class("-active")
+        assert not cmd_input.has_class("active")
 
         await pilot.press("shift+semicolon")
         await pilot.pause()
 
-        assert cmd_input.has_class("-active")
+        assert cmd_input.has_class("active")
         assert app.focused is cmd_input
 
 
@@ -157,12 +157,12 @@ async def test_colon_via_action_enter_command_mode(vault: Vault) -> None:
         await pilot.pause()
 
         cmd_input = app.query_one("#command-input", Input)
-        assert not cmd_input.has_class("-active")
+        assert not cmd_input.has_class("active")
 
         app.action_enter_command_mode()
         await pilot.pause()
 
-        assert cmd_input.has_class("-active")
+        assert cmd_input.has_class("active")
         assert app.focused is cmd_input
 
 
@@ -176,11 +176,11 @@ async def test_escape_exits_command_mode(vault: Vault) -> None:
         cmd_input = app.query_one("#command-input", Input)
         await pilot.press("shift+semicolon")
         await pilot.pause()
-        assert cmd_input.has_class("-active")
+        assert cmd_input.has_class("active")
 
         await pilot.press("escape")
         await pilot.pause()
-        assert not cmd_input.has_class("-active")
+        assert not cmd_input.has_class("active")
 
 
 @pytest.mark.asyncio
@@ -210,7 +210,7 @@ async def test_q_does_not_quit_when_focused_in_input(vault: Vault) -> None:
         await pilot.pause()
 
         cmd_input = app.query_one("#command-input", Input)
-        cmd_input.add_class("-active")
+        cmd_input.add_class("active")
         cmd_input.focus()
         await pilot.pause()
 
