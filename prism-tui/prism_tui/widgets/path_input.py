@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.events import Key
-from textual.widgets import Input, Label, ListItem, ListView
 from textual.widget import Widget
+from textual.widgets import Input, Label, ListItem, ListView
 
 from prism_tui.widgets.completions import FilesystemCompleter, PathCompleter
 
@@ -57,7 +59,7 @@ class PathInput(Widget):
         self,
         completer: PathCompleter | None = None,
         placeholder: str = "",
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._completer = completer or FilesystemCompleter()

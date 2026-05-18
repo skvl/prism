@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from prism.vault.vault import Vault
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label
 
-from prism.vault.vault import Vault
 from prism_tui.widgets.path_input import PathInput
 
 

@@ -5,7 +5,6 @@ import tempfile
 
 import pytest
 from textual.app import App, ComposeResult
-from textual.widgets import Input
 
 from prism_tui.widgets.path_input import PathInput
 
