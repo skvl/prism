@@ -226,6 +226,9 @@ class GraphTab(Static):
     def _load_graph(self) -> None:
         if self._vault is None:
             return
+        self._pan_x = 0
+        self._pan_y = 0
+        self._zoom = 1.0
         self._manager = NodeManager(self._vault.path)
         self._all_nodes = self._manager.list_nodes()
         exporter = GraphExporter(self._vault.path)
@@ -310,9 +313,6 @@ class GraphTab(Static):
     def _handle_pan(self, direction: str) -> None:
         if self._layout is None:
             return
-        canvas_widget = self.query_one("#graph-canvas", Static)
-        view_w = canvas_widget.content_region.width
-        view_h = canvas_widget.content_region.height
         if direction == "left":
             self._pan_x = max(0, self._pan_x - 5)
         elif direction == "right":
