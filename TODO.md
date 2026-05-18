@@ -26,6 +26,16 @@ after I input data for query.
 Check what is current test coverage and what could we do better. I would prefer
 to have coverage 90%+.
 
+## F6. Simplify project files
+
+I think current project setup is not clear. There are different files like
+`mypy.ini`, `pyrightconfig.json`, `requirements-prism-cli.txt`,
+`requirements-prism-core.txt`. I'm not a Python expert and don't understand all
+of them. Mybe some of them are useless. No development setup is described in
+README or other files. We should clarify this all.
+
+## F7. Describe TUI in README
+
 # Proposals
 
 ## P1. Obsidian like editor
@@ -89,8 +99,8 @@ description should be open to be able searchable.
 
 ## P5. Tasks management
 
-I think that "tasks" are naturally calendar events with som properties. The
-Obsidian's Tasks plugin is good reference.
+I think that "tasks" are naturally calendar events. The Obsidian's Tasks plugin
+is good reference.
 
 **TODO** Continue
 
@@ -105,3 +115,17 @@ Obsidian's Tasks plugin is good reference.
 ## P8. Encrypted backup to remote
 
 **TODO** Continue
+
+## P9. Simple browser
+
+It would be greate to have embeded browser. Like Lynx or Links. It should
+support HTML/CSS but no JavaScript.
+
+**TODO** Continue
+
+## P10. Namespaces
+
+If two users works with same system it would be greate to allow them to switch
+to their own namespaces. Though the nodes are shared for both. So may be
+namespaces are just tags like `user1` and `user2`? Or may be those are different
+vaults? We should brainstorm if this feature is worth to implement.
