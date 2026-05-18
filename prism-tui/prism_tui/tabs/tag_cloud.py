@@ -42,7 +42,7 @@ class TagCloudTab(Static):
     .tag-button-md { min-width: 8; }
     .tag-button-lg { min-width: 10; }
 
-    #clear-btn {
+    .clear-btn {
         width: 12;
         margin: 0 1;
     }
@@ -76,6 +76,7 @@ class TagCloudTab(Static):
                 self._tag_nodes[tag].append(node)
         self._tag_counts = counts
         self._render_cloud()
+        self._update_node_list()
 
     def _render_cloud(self) -> None:
         area = self.query_one("#tag-cloud-area", VerticalScroll)
@@ -97,11 +98,12 @@ class TagCloudTab(Static):
                 f"{tag} ({count})",
                 classes=f"tag-button {style_class}",
             )
-            btn._tag_name = tag
+            btn._tag_name = tag  # type: ignore[attr-defined]
             if tag in self._selected_tags:
                 btn.variant = "primary"
             area.mount(btn)
-        btn = Button("Clear", id="clear-btn")
+        btn = Button("Clear", classes="clear-btn")
+        btn._tag_name = "__clear__"  # type: ignore[attr-defined]
         area.mount(btn)
 
     def _update_node_list(self) -> None:
@@ -124,7 +126,9 @@ class TagCloudTab(Static):
                 for node in nodes:
                     tags_str = ", ".join(node.tags) if node.tags else ""
                     label = f"{node.type} {node.title}  [{tags_str}]"
-                    list_view.append(ListItem(Label(label), id=node.uuid))
+                    item = ListItem(Label(label))
+                    item._node_uuid = node.uuid  # type: ignore[attr-defined]
+                    list_view.append(item)
         else:
             self._filtered_nodes = []
         self._highlight_co_occurring()
@@ -155,12 +159,12 @@ class TagCloudTab(Static):
             self._load_tags()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "clear-btn":
+        tag_name = getattr(event.button, "_tag_name", "")
+        if tag_name == "__clear__":
             self._selected_tags.clear()
             self._render_cloud()
             self._update_node_list()
             return
-        tag_name = getattr(event.button, "_tag_name", "")
         if tag_name in self._selected_tags:
             self._selected_tags.remove(tag_name)
         else:
@@ -178,7 +182,8 @@ class TagCloudTab(Static):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.item is None:
             return
+        node_uuid = getattr(event.item, "_node_uuid", "")
         for node in self._filtered_nodes:
-            if node.uuid == event.item.id:
+            if node.uuid == node_uuid:
                 self.post_message(SelectNode(node))
                 break

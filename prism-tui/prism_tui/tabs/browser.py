@@ -14,6 +14,8 @@ from prism.node.metadata import NodeMetadata
 from prism.path.resolver import PathResolver
 from prism.vault.vault import Vault
 
+from ..command_mode import EditNodeWizard
+
 
 class PathTree(Tree[str]):
     def __init__(self, **kwargs: object) -> None:
@@ -287,12 +289,24 @@ class BrowserTab(Static):
         if self._manager is None or self._current_node is None:
             return
         blob_path = self._manager.storage.get_blob_path(self._current_node.uuid)
-        if not blob_path:
-            self.notify("No body to edit", severity="warning", timeout=3)
+        if blob_path:
+            editor = os.environ.get("EDITOR", "vi")
+            original_mtime = os.stat(blob_path).st_mtime
+            subprocess.call([editor, blob_path])
+            new_mtime = os.stat(blob_path).st_mtime
+            if new_mtime > original_mtime:
+                self._show_preview(self._current_node)
             return
-        editor = os.environ.get("EDITOR", "vi")
-        original_mtime = os.stat(blob_path).st_mtime
-        subprocess.call([editor, blob_path])
-        new_mtime = os.stat(blob_path).st_mtime
-        if new_mtime > original_mtime:
-            self._show_preview(self._current_node)
+        node = self._current_node
+        self.app.push_screen(
+            EditNodeWizard(self._vault, node),
+            lambda _: self._on_edit_done(node),
+        )
+
+    def _on_edit_done(self, node: NodeMetadata) -> None:
+        if self._vault:
+            self.app._update_tabs_vault(self._vault)
+        updated = self._nodes_by_uuid.get(node.uuid)
+        if updated is not None:
+            self._current_node = updated
+            self._show_preview(updated)

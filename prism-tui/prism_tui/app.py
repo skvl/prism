@@ -184,6 +184,7 @@ class PrismTui(App):
         browser = self.query_one(BrowserTab)
         if hasattr(browser, "set_vault") and self._vault:
             browser.set_vault(self._vault)
+        browser._current_node = message.node
         self.notify(f"Selected: {message.node.title}", timeout=2)
 
 

@@ -2,17 +2,29 @@
 
 ## F1. TUI open/init wizard TAB-completion
 
-Whe user inputs path to vault it should allow to tab complete it. E.g. with
+When user inputs path to vault it should allow to tab complete it. E.g. with
 `/tm` with `TAB` it should complete to `/tmp/`. If several variants exist then
 it should display them all like `zsh`.
+
+Also I want with `ENTER` press use path from input. Currently I have to TAB to
+select one of buttons `open` or `init`.
 
 ## F2. New node wizard should provide path input
 
 ## F3. All nodes without path must have `/` path by default
 
-## F4. Grap tab shows only part of long node title
+This changes the core, CLI and TUI. Alsow you should update README and
+specifications.
 
-## F5. Press on node in Tags tab result in `DuplicateIds: Tried to insert a widget with ID 'tag-ai'` error
+## F4. Query tab not working
+
+I could select type and tags but there is no search button. So Results is empty
+after I input data for query.
+
+## F5. Low test coverage for core, cli and tui
+
+Check what is current test coverage and what could we do better. I would prefer
+to have coverage 90%+.
 
 # Proposals
 
@@ -20,7 +32,8 @@ it should display them all like `zsh`.
 
 With Obsidian one could press `[[` and get list of articles to link with. More
 over one could use `#` to link with section by header and `^` with some text in
-article. I would like to add simple `nano` like editor with such features.
+article. Or using `![[` allows to insert images or even documents with preview.
+I would like to add simple `nano` like editor with such features.
 
 I would like that this new editor provide raw and view modes. In raw
 mode when user builds table it is shown as is in raw markdown. In randered mode
@@ -64,14 +77,20 @@ the best one.
 It seems natural to store passwords in single manager with all other data. The
 good password manager for reference is KeePassXC. It could store a lot of data:
 searchable title, username and password, URL, description, additional files and
-key-value storage. We should carefully select what should be open and what must
-be encrypted.
+key-value storage.
 
-**TODO** Continue
+I think Prism could add new type of node like `password`. Password should
+provide a new set of properties to store title, username and password, etc. like
+KeePassXC. It is worth to consider the agile properties feature for every node.
+
+But we should carefully select what should be open and what must be encrypted.
+E.g. username and password must be encrypted. But title, tags, may be
+description should be open to be able searchable.
 
 ## P5. Tasks management
 
-I think that "tasks" are naturally calendar events with som properties.
+I think that "tasks" are naturally calendar events with som properties. The
+Obsidian's Tasks plugin is good reference.
 
 **TODO** Continue
 

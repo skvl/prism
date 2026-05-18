@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import os
 import shlex
+from datetime import datetime, timezone
 from typing import Callable
 
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, Static
+from textual.widgets import Button, Input, Label, Select, Static, TextArea
 
 from prism.node.manager import NodeManager
 from prism.node.metadata import NodeMetadata
@@ -229,6 +230,119 @@ class TagManageWizard(ModalScreen[dict | None]):
             tags_str = self.query_one("#tags-input", Input).value.strip()
             tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
             self.dismiss({"tags": tags})
+
+
+class EditNodeWizard(ModalScreen[bool]):
+    CSS = """
+    EditNodeWizard {
+        align: center middle;
+    }
+
+    #dialog {
+        width: 60;
+        height: auto;
+        padding: 2 3;
+        border: thick $primary;
+        background: $surface;
+    }
+
+    Label {
+        margin-top: 1;
+    }
+
+    Input, TextArea {
+        width: 100%;
+    }
+
+    #desc-input {
+        height: 5;
+    }
+
+    #wizard-buttons {
+        height: 3;
+        margin-top: 1;
+    }
+
+    Button {
+        width: 50%;
+    }
+    """
+
+    def __init__(self, vault: Vault, node: NodeMetadata) -> None:
+        super().__init__()
+        self._vault = vault
+        self._node = node
+        self._manager = NodeManager(vault.path)
+        self._schema = self._manager.type_loader.load(node.type)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(f"Edit {self._node.type}: {self._node.title}", id="title")
+            yield Label("Title:")
+            yield Input(value=self._node.title, id="title-input")
+            yield Label("Tags (comma separated):")
+            yield Input(value=", ".join(self._node.tags), id="tags-input")
+            if self._schema:
+                for field in self._schema.fields:
+                    if field.name in ("title", "tags"):
+                        continue
+                    yield Label(field.name.capitalize() + ":")
+                    value = self._node.fields.get(field.name, "")
+                    yield Input(
+                        value=str(value) if value is not None else "",
+                        id=f"field-{field.name}",
+                    )
+            yield Label("Description:")
+            yield TextArea(id="desc-input")
+            with Horizontal(id="wizard-buttons"):
+                yield Button("Save", variant="primary", id="save-btn")
+                yield Button("Cancel", id="cancel-btn")
+
+    def on_mount(self) -> None:
+        storage_dir = compute_storage_path(self._vault.path, self._node.uuid)
+        desc_path = NodeMetadata.description_path(storage_dir)
+        if os.path.exists(desc_path):
+            with open(desc_path) as f:
+                self.query_one("#desc-input", TextArea).text = f.read()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel-btn":
+            self.dismiss(False)
+        elif event.button.id == "save-btn":
+            self._save()
+            self.dismiss(True)
+
+    def _save(self) -> None:
+        uid = self._node.uuid
+        storage_dir = compute_storage_path(self._vault.path, uid)
+        meta_path = NodeMetadata.metadata_path(storage_dir)
+        meta = NodeMetadata.from_toml(meta_path)
+
+        title = self.query_one("#title-input", Input).value.strip()
+        tags_str = self.query_one("#tags-input", Input).value.strip()
+        tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+
+        meta.title = title
+        meta.tags = tags
+
+        if self._schema:
+            for field in self._schema.fields:
+                if field.name in ("title", "tags"):
+                    continue
+                input_id = f"field-{field.name}"
+                widget = self.query_one(f"#{input_id}", Input)
+                val = widget.value.strip()
+                if val:
+                    meta.fields[field.name] = val
+                else:
+                    meta.fields.pop(field.name, None)
+
+        meta.updated_at = datetime.now(timezone.utc).isoformat()
+        meta.sync_dirty = True
+        meta.save(meta_path)
+
+        desc = self.query_one("#desc-input", TextArea).text
+        self._manager.set_description(uid, desc)
 
 
 def execute_command(

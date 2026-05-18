@@ -89,7 +89,9 @@ class CommandBar(Static):
         }
         action_name = action_map.get(action)
         if action_name:
-            self.app.action(action_name)
+            handler = getattr(self.app, f"action_{action_name}", None)
+            if handler:
+                handler()
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="action-bar"):
