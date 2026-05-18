@@ -12,7 +12,8 @@ The Graph View tab SHALL render the vault's node graph as a force-directed visua
 
 #### Scenario: Node appearance
 - **WHEN** a node is rendered on the Canvas
-- **THEN** the node box SHALL display the first 12 characters of the node's title
+- **THEN** the node label SHALL display the full node title without truncation
+- **THEN** the user SHALL pan the view with arrow keys to see labels beyond the viewport
 - **THEN** the node box SHALL be colored by node type (e.g., note=blue, contact=green, file=yellow)
 
 #### Scenario: Edge appearance
