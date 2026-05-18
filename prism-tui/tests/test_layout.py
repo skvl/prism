@@ -77,3 +77,13 @@ def test_render_ascii_long_title_shows_more_than_8_chars() -> None:
     # (floor of avail calculation). The old [:8] hard cap would show at most 8 chars.
     # We verify that the title text actually appears in the output.
     assert "This is a " in output
+
+
+def test_render_ascii_shows_full_title() -> None:
+    title = "Complete Node Title That Should Not Be Truncated"
+    nodes = [_make_node("abc-123", title)]
+    links: list[dict[str, str]] = []
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(10)
+    output = layout.render_ascii()
+    assert title in output

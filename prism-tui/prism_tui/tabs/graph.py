@@ -90,34 +90,79 @@ class ForceDirectedLayout:
                 py = max(3.0, min(float(self.height - 3), py + vy))
                 self.positions[uid] = (px, py)
 
-    def render_ascii(self, selected: str | None = None) -> str:
-        canvas: list[list[str]] = [
-            [" " for _ in range(self.width)] for _ in range(self.height)
-        ]
-        for link in self.links:
-            src = link.get("source", "")
-            tgt = link.get("target", "")
-            if src in self.positions and tgt in self.positions:
-                sx, sy = self.positions[src]
-                tx, ty = self.positions[tgt]
-                self._draw_line(canvas, int(sx), int(sy), int(tx), int(ty))
+    def render_ascii(
+        self,
+        selected: str | None = None,
+        view_width: int | None = None,
+        view_height: int | None = None,
+        pan_x: int = 0,
+        pan_y: int = 0,
+        zoom: float = 1.0,
+    ) -> str:
+        scale = zoom
+        max_x = 0
+        max_y = 0
+        scaled_positions: dict[str, tuple[float, float]] = {}
         for node in self.node_list:
             uid = node.uuid
             if uid not in self.positions:
                 continue
-            x, y = self.positions[uid]
-            ix, iy = int(x), int(y)
-            avail = max(4, self.width - ix - 1) if uid == selected else max(4, self.width - ix)
-            label = (node.title or uid)[:avail]
-            color = TYPE_COLORS.get(node.type, "white")
+            px, py = self.positions[uid]
+            sx, sy = px * scale, py * scale
+            scaled_positions[uid] = (sx, sy)
+            ix, iy = int(sx), int(sy)
+            label_len = int(len(node.title or uid) * scale) + 1
+            if uid == selected:
+                label_len += 1
+            max_x = max(max_x, ix + label_len)
+            max_y = max(max_y, iy + 1)
+
+        logical_w = max(max_x, view_width or max_x)
+        logical_h = max(max_y, view_height or max_y)
+
+        canvas: list[list[str]] = [
+            [" " for _ in range(logical_w)] for _ in range(logical_h)
+        ]
+
+        for link in self.links:
+            src = link.get("source", "")
+            tgt = link.get("target", "")
+            if src in scaled_positions and tgt in scaled_positions:
+                sx, sy = scaled_positions[src]
+                tx, ty = scaled_positions[tgt]
+                self._draw_line(canvas, int(sx), int(sy), int(tx), int(ty), logical_w, logical_h)
+
+        for node in self.node_list:
+            uid = node.uuid
+            if uid not in scaled_positions:
+                continue
+            ix, iy = int(scaled_positions[uid][0]), int(scaled_positions[uid][1])
+            label = node.title or uid
             selected_marker = "*" if uid == selected else " "
             for ci, ch in enumerate(f"{selected_marker}{label}"):
-                if 0 <= ix + ci < self.width and 0 <= iy < self.height:
-                    canvas[iy][ix + ci] = ch
+                col = ix + ci
+                if 0 <= col < logical_w and 0 <= iy < logical_h:
+                    canvas[iy][col] = ch
+
+        if view_width is not None and view_height is not None:
+            pan_x = max(0, min(pan_x, logical_w - view_width))
+            pan_y = max(0, min(pan_y, logical_h - view_height))
+            lines = []
+            for y in range(pan_y, pan_y + view_height):
+                if y < logical_h:
+                    row = "".join(canvas[y][pan_x:pan_x + view_width])
+                    if len(row) < view_width:
+                        row += " " * (view_width - len(row))
+                    lines.append(row)
+                else:
+                    lines.append(" " * view_width)
+            return "\n".join(lines)
+
         return "\n".join("".join(row) for row in canvas)
 
     def _draw_line(
-        self, canvas: list[list[str]], x0: int, y0: int, x1: int, y1: int
+        self, canvas: list[list[str]], x0: int, y0: int, x1: int, y1: int,
+        logical_w: int, logical_h: int,
     ) -> None:
         dx = abs(x1 - x0)
         dy = -abs(y1 - y0)
@@ -125,7 +170,7 @@ class ForceDirectedLayout:
         sy = 1 if y0 < y1 else -1
         err = dx + dy
         while True:
-            if 0 <= x0 < self.width and 0 <= y0 < self.height:
+            if 0 <= x0 < logical_w and 0 <= y0 < logical_h:
                 if canvas[y0][x0] == " ":
                     canvas[y0][x0] = "."
             if x0 == x1 and y0 == y1:
