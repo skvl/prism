@@ -87,3 +87,23 @@ def test_render_ascii_shows_full_title() -> None:
     layout.tick(10)
     output = layout.render_ascii()
     assert title in output
+
+
+def test_render_ascii_pan_offsets_content() -> None:
+    nodes = [_make_node("abc-123", "HelloWorld")]
+    links: list[dict[str, str]] = []
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(10)
+    full = layout.render_ascii()
+    panned = layout.render_ascii(view_width=80, view_height=40, pan_x=20, pan_y=0)
+    assert full != panned
+
+
+def test_render_ascii_zoom_changes_output() -> None:
+    nodes = [_make_node("abc-123", "Test")]
+    links: list[dict[str, str]] = []
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(10)
+    normal = layout.render_ascii(view_width=80, view_height=40)
+    zoomed = layout.render_ascii(view_width=80, view_height=40, zoom=2.0)
+    assert normal != zoomed

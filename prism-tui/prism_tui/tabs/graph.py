@@ -250,7 +250,16 @@ class GraphTab(Static):
         if self._layout is None:
             canvas_widget.update("No graph data")
             return
-        ascii_art = self._layout.render_ascii(selected=self._selected_uuid)
+        view_width = canvas_widget.content_region.width
+        view_height = canvas_widget.content_region.height
+        ascii_art = self._layout.render_ascii(
+            selected=self._selected_uuid,
+            view_width=view_width,
+            view_height=view_height,
+            pan_x=self._pan_x,
+            pan_y=self._pan_y,
+            zoom=self._zoom,
+        )
         canvas_widget.update(ascii_art)
 
     def _show_list_view(self, nodes: list[NodeMetadata]) -> None:
@@ -299,12 +308,17 @@ class GraphTab(Static):
         self.notify("Enter type filter (use :command mode)", severity="information", timeout=3)
 
     def _handle_pan(self, direction: str) -> None:
+        if self._layout is None:
+            return
+        canvas_widget = self.query_one("#graph-canvas", Static)
+        view_w = canvas_widget.content_region.width
+        view_h = canvas_widget.content_region.height
         if direction == "left":
-            self._pan_x -= 5
+            self._pan_x = max(0, self._pan_x - 5)
         elif direction == "right":
             self._pan_x += 5
         elif direction == "up":
-            self._pan_y -= 2
+            self._pan_y = max(0, self._pan_y - 2)
         elif direction == "down":
             self._pan_y += 2
         self._render_canvas()
