@@ -27,8 +27,11 @@ class _PathField(Input):
 class PathInput(Widget):
     """Widget combining an Input with TAB-completion popup.
 
-    Composes a ``_PathField`` child for text entry and optionally mounts
-    a ``ListView`` popup below the input when multiple completions exist.
+    Uses composition (not Input inheritance) — wraps a ``_PathField`` child
+    for text entry and optionally mounts a ``ListView`` popup below the
+    input when multiple completions exist.  Exposes ``value``,
+    ``cursor_position``, and ``placeholder`` delegation properties so
+    callers can treat it like an ``Input``.
     TAB cycles through matches; ESC dismisses the popup; typing dismisses it.
     """
 

@@ -141,7 +141,71 @@ async def test_typing_dismisses_popup() -> None:
             await pilot.press("tab")
             await pilot.pause()
             assert pi._popup is not None
-            # Type a character
+            await pilot.press("x")
+            await pilot.pause()
+            assert pi._popup is None
+
+
+@pytest.mark.asyncio
+async def test_cycling_updates_popup_highlight() -> None:
+    """TAB cycling should update the popup's highlighted index."""
+    with tempfile.TemporaryDirectory() as tmp:
+        os.makedirs(os.path.join(tmp, "alpha"))
+        os.makedirs(os.path.join(tmp, "alpine"))
+        os.makedirs(os.path.join(tmp, "alright"))
+        app = _PathInputHarness()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            pi = app.screen.query_one("#test-path-input", PathInput)
+            pi.value = os.path.join(tmp, "al")
+            pi.cursor_position = len(pi.value)
+            await pilot.press("tab")
+            await pilot.pause()
+            assert pi._popup is not None
+            initial_index = pi._popup.index
+            await pilot.press("tab")
+            await pilot.pause()
+            assert pi._popup.index != initial_index
+
+
+@pytest.mark.asyncio
+async def test_cycling_wraps_around() -> None:
+    """TAB cycling should wrap from last match back to first."""
+    with tempfile.TemporaryDirectory() as tmp:
+        os.makedirs(os.path.join(tmp, "alpha"))
+        os.makedirs(os.path.join(tmp, "alpine"))
+        app = _PathInputHarness()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            pi = app.screen.query_one("#test-path-input", PathInput)
+            pi.value = os.path.join(tmp, "al")
+            pi.cursor_position = len(pi.value)
+            await pilot.press("tab")
+            await pilot.pause()
+            first_value = pi.value
+            await pilot.press("tab")
+            await pilot.pause()
+            await pilot.press("tab")
+            await pilot.pause()
+            assert pi.value == first_value
+
+
+@pytest.mark.asyncio
+async def test_typing_dismisses_after_cycling() -> None:
+    """Typing should dismiss popup even after cycling through matches."""
+    with tempfile.TemporaryDirectory() as tmp:
+        os.makedirs(os.path.join(tmp, "alpha"))
+        os.makedirs(os.path.join(tmp, "alpine"))
+        app = _PathInputHarness()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            pi = app.screen.query_one("#test-path-input", PathInput)
+            pi.value = os.path.join(tmp, "al")
+            await pilot.press("tab")
+            await pilot.pause()
+            await pilot.press("tab")
+            await pilot.pause()
+            assert pi._popup is not None
             await pilot.press("x")
             await pilot.pause()
             assert pi._popup is None
