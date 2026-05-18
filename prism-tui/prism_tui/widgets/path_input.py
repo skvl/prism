@@ -56,6 +56,7 @@ class PathInput(Widget):
     def __init__(
         self,
         completer: PathCompleter | None = None,
+        placeholder: str = "",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -63,9 +64,10 @@ class PathInput(Widget):
         self._popup: ListView | None = None
         self._matches: list[str] = []
         self._match_index: int = 0
+        self._placeholder = placeholder
 
     def compose(self) -> ComposeResult:
-        yield _PathField(id="path-field")
+        yield _PathField(placeholder=self._placeholder, id="path-field")
 
     @property
     def value(self) -> str:

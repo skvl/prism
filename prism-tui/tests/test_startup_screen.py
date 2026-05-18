@@ -12,6 +12,7 @@ from textual.app import App
 
 from prism_tui.app import PrismTui
 from prism_tui.startup_screen import StartupScreen
+from prism_tui.widgets.path_input import PathInput
 
 
 class _StartupHarness(App[Vault | None]):
@@ -177,3 +178,71 @@ async def test_app_skips_startup_screen_when_vault_provided() -> None:
         await pilot.pause()
         assert not isinstance(app.screen, StartupScreen)
         app.exit()
+
+
+@pytest.mark.asyncio
+async def test_enter_on_existing_vault_calls_open() -> None:
+    """ENTER with a path to an existing vault should call Vault.open."""
+    mock_vault = MagicMock(spec=Vault)
+    with (
+        patch("prism_tui.startup_screen.Vault.open", return_value=mock_vault) as mock_open,
+        patch("prism_tui.startup_screen._path_is_vault", return_value=True),
+    ):
+        app = _StartupHarness()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+            path_input = screen.query_one("#path-input")
+            path_input.value = "/tmp/test-vault"
+            await pilot.press("enter")
+            await pilot.pause()
+        mock_open.assert_called_once_with("/tmp/test-vault")
+        assert app.captured[-1] is mock_vault
+
+
+@pytest.mark.asyncio
+async def test_enter_on_new_path_calls_init() -> None:
+    """ENTER with a path that doesn't exist should call Vault.init."""
+    mock_vault = MagicMock(spec=Vault)
+    with (
+        patch("prism_tui.startup_screen.Vault.init", return_value=mock_vault) as mock_init,
+        patch("prism_tui.startup_screen._path_is_vault", return_value=False),
+    ):
+        app = _StartupHarness()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+            path_input = screen.query_one("#path-input")
+            path_input.value = "/tmp/new-vault"
+            await pilot.press("enter")
+            await pilot.pause()
+        mock_init.assert_called_once_with("/tmp/new-vault")
+        assert app.captured[-1] is mock_vault
+
+
+@pytest.mark.asyncio
+async def test_enter_empty_path_uses_default() -> None:
+    """ENTER with empty path should try Vault.open at default location first."""
+    mock_vault = MagicMock(spec=Vault)
+    with (
+        patch("prism_tui.startup_screen.Vault.open", return_value=mock_vault) as mock_open,
+        patch("prism_tui.startup_screen._path_is_vault", return_value=True),
+    ):
+        app = _StartupHarness()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+        mock_open.assert_called_once()
+        assert app.captured[-1] is mock_vault
+
+
+@pytest.mark.asyncio
+async def test_startup_screen_uses_path_input() -> None:
+    """StartupScreen should use PathInput widget."""
+    app = _StartupHarness()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        path_input = screen.query_one("#path-input")
+        assert isinstance(path_input, PathInput)
