@@ -223,6 +223,8 @@ async def test_enter_on_new_path_calls_init() -> None:
 @pytest.mark.asyncio
 async def test_enter_empty_path_uses_default() -> None:
     """ENTER with empty path should try Vault.open at default location first."""
+    from prism_tui.startup_screen import _DEFAULT_VAULT_PATH
+
     mock_vault = MagicMock(spec=Vault)
     with (
         patch("prism_tui.startup_screen.Vault.open", return_value=mock_vault) as mock_open,
@@ -233,7 +235,7 @@ async def test_enter_empty_path_uses_default() -> None:
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
-        mock_open.assert_called_once()
+        mock_open.assert_called_once_with(_DEFAULT_VAULT_PATH)
         assert app.captured[-1] is mock_vault
 
 
