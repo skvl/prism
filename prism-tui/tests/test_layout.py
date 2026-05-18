@@ -65,3 +65,15 @@ def test_render_ascii_marks_selected_node() -> None:
     output_selected = layout.render_ascii(selected="sel-uuid")
     output_unselected = layout.render_ascii(selected=None)
     assert output_selected != output_unselected
+
+
+def test_render_ascii_long_title_shows_more_than_8_chars() -> None:
+    nodes = [_make_node("abc-123", "This is a very long node title that should show")]
+    links: list[dict[str, str]] = []
+    layout = ForceDirectedLayout(nodes, links)
+    layout.tick(10)
+    output = layout.render_ascii()
+    # The dynamic truncation should show at least 4 chars of the title
+    # (floor of avail calculation). The old [:8] hard cap would show at most 8 chars.
+    # We verify that the title text actually appears in the output.
+    assert "This is a " in output

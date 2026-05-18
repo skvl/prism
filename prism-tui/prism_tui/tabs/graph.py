@@ -107,7 +107,8 @@ class ForceDirectedLayout:
                 continue
             x, y = self.positions[uid]
             ix, iy = int(x), int(y)
-            label = node.title[:8] if node.title else uid[:8]
+            avail = max(4, self.width - ix - 1) if uid == selected else max(4, self.width - ix)
+            label = (node.title or uid)[:avail]
             color = TYPE_COLORS.get(node.type, "white")
             selected_marker = "*" if uid == selected else " "
             for ci, ch in enumerate(f"{selected_marker}{label}"):
