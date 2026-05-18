@@ -95,9 +95,9 @@ class TagCloudTab(Static):
                 style_class = "tag-button-sm"
             btn = Button(
                 f"{tag} ({count})",
-                id=f"tag-{tag}",
                 classes=f"tag-button {style_class}",
             )
+            btn._tag_name = tag
             if tag in self._selected_tags:
                 btn.variant = "primary"
             area.mount(btn)
@@ -139,11 +139,9 @@ class TagCloudTab(Static):
                     if t not in self._selected_tags:
                         co_tags[t] += 1
         area = self.query_one("#tag-cloud-area", VerticalScroll)
-        for btn in area.query(Button):
-            if btn.id == "clear-btn":
-                continue
-            tag_name = btn.id.replace("tag-", "", 1) if btn.id else ""
-            if tag_name in self._selected_tags:
+        for btn in area.query(".tag-button"):
+            tag_name = getattr(btn, "_tag_name", "")
+            if not tag_name or tag_name in self._selected_tags:
                 continue
             if co_tags.get(tag_name, 0) > 0:
                 btn.styles.border = ("solid", "yellow")
@@ -162,7 +160,7 @@ class TagCloudTab(Static):
             self._render_cloud()
             self._update_node_list()
             return
-        tag_name = event.button.id.replace("tag-", "", 1) if event.button.id else ""
+        tag_name = getattr(event.button, "_tag_name", "")
         if tag_name in self._selected_tags:
             self._selected_tags.remove(tag_name)
         else:
