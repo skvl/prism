@@ -350,3 +350,87 @@ class TestSha256:
         result = tutor._sha256(file_path)
         assert len(result) == 64
         assert result == sha256_file(file_path)
+
+
+# ── Show Output ──────────────────────────────────────────────────────────
+
+
+class TestShowOutput:
+    def test_show_output(self, capsys):
+        tutor = Tutor()
+        tutor._show_output("hello world")
+        captured = capsys.readouterr()
+        assert "-> hello world" in captured.out
+
+    def test_show_output_empty(self, capsys):
+        tutor = Tutor()
+        tutor._show_output("")
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_show_output_multiline(self, capsys):
+        tutor = Tutor()
+        tutor._show_output("line1\nline2")
+        captured = capsys.readouterr()
+        assert "-> line1" in captured.out
+        assert "-> line2" in captured.out
+
+
+# ── Show Success ─────────────────────────────────────────────────────────
+
+
+class TestShowSuccess:
+    def test_show_success(self, capsys):
+        tutor = Tutor()
+        tutor._show_success("Step complete!")
+        captured = capsys.readouterr()
+        assert "OK Step complete!" in captured.out
+
+
+# ── Execute Command ─────────────────────────────────────────────────────
+
+
+class TestExecuteCommand:
+    def test_execute_echo(self, vault_dir):
+        tutor = Tutor()
+        tutor.temp_dir = vault_dir
+        result = tutor._execute_command("echo hello")
+        assert result.returncode == 0
+        assert result.stdout.strip() == "hello"
+
+    def test_execute_failure(self, vault_dir):
+        tutor = Tutor()
+        tutor.temp_dir = vault_dir
+        result = tutor._execute_command("false")
+        assert result.returncode != 0
+
+
+# ── Build Lesson Plan ────────────────────────────────────────────────────
+
+
+class TestBuildLessonPlan:
+    def test_eight_lessons(self):
+        from prism_cli.tutor import Lesson
+
+        tutor = Tutor()
+        lessons = tutor._build_lesson_plan()
+        assert len(lessons) == 8
+        for lesson in lessons:
+            assert isinstance(lesson, Lesson)
+            assert len(lesson.steps) >= 1
+
+    def test_lesson_numbering(self):
+        tutor = Tutor()
+        lessons = tutor._build_lesson_plan()
+        for i, lesson in enumerate(lessons, 1):
+            assert lesson.number == i
+
+
+# ── Get Node UUID By Title ───────────────────────────────────────────────
+
+
+class TestGetNodeUUIDByTitle:
+    def test_not_found(self, vault):
+        tutor = Tutor()
+        tutor.vault = vault
+        assert tutor._get_node_uuid_by_title(vault, "NonExistent") is None

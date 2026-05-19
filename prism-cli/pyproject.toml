@@ -58,6 +58,10 @@ disable = "C,R"
 [tool.pyright]
 extraPaths = ["../prism-core"]
 
+[tool.coverage.run]
+source = ["prism_cli"]
+relative_files = true
+
 [tool.bandit]
 skips = ["B101", "B110", "B112", "B404", "B603", "B607"]
 exclude_dirs = ["tests"]
