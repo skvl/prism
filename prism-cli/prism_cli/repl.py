@@ -139,6 +139,8 @@ class Repl:
 
     def _handle_line(self, line: str) -> bool:
         parts = line.split()
+        if not parts:
+            return False
         cmd = parts[0].lower()
         args = parts[1:]
 

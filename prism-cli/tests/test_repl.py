@@ -250,6 +250,28 @@ class TestReplRm:
         output = run_repl(vault, ["rm", "exit"])
         assert "Usage:" in output
 
+    def test_rm_with_backlinks_abort(self, vault):
+        manager = NodeManager(vault.path)
+        target = manager.create_node(type_name="note", title="Rm Target")
+        source = manager.create_node(type_name="note", title="Rm Source")
+        storage_dir = compute_storage_path(vault.path, source.uuid)
+        source_meta = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        source_meta.links = [{"target": target.uuid}]
+        source_meta.save(NodeMetadata.metadata_path(storage_dir))
+        output = run_repl(vault, [f"rm {target.uuid[:12]}", "n", "exit"])
+        assert "Aborted" in output
+
+    def test_rm_with_backlinks_force(self, vault):
+        manager = NodeManager(vault.path)
+        target = manager.create_node(type_name="note", title="Rm Force")
+        source = manager.create_node(type_name="note", title="Rm Source")
+        storage_dir = compute_storage_path(vault.path, source.uuid)
+        source_meta = NodeMetadata.from_toml(NodeMetadata.metadata_path(storage_dir))
+        source_meta.links = [{"target": target.uuid}]
+        source_meta.save(NodeMetadata.metadata_path(storage_dir))
+        output = run_repl(vault, [f"rm {target.uuid[:12]}", "y", "exit"])
+        assert "Deleted node" in output
+
 
 # ── Link ────────────────────────────────────────────────────────────────
 
@@ -401,6 +423,23 @@ class TestReplAddFile:
         output = run_repl(vault, ["add-file", "exit"])
         assert "Usage:" in output
 
+    def test_add_file_already_exists_abort(self, vault, vault_dir):
+        file_path = os.path.join(vault_dir, "dup.txt")
+        with open(file_path, "w") as f:
+            f.write("duplicate content")
+        run_repl(vault, [f"add-file {file_path}", "exit"])
+        output = run_repl(vault, [f"add-file {file_path}", "n", "exit"])
+        assert "File already exists" in output
+
+    def test_add_file_already_exists_force(self, vault, vault_dir):
+        file_path = os.path.join(vault_dir, "dup_force.txt")
+        with open(file_path, "w") as f:
+            f.write("force duplicate")
+        run_repl(vault, [f"add-file {file_path}", "exit"])
+        output = run_repl(vault, [f"add-file {file_path}", "y", "exit"])
+        assert "File already exists" in output
+        assert "Imported as node" in output
+
 
 # ── Verify ──────────────────────────────────────────────────────────────
 
@@ -422,6 +461,38 @@ class TestReplVerify:
     def test_verify_no_args(self, vault):
         output = run_repl(vault, ["verify", "exit"])
         assert "Usage:" in output
+
+    def test_verify_corrupted(self, vault, vault_dir):
+        manager = NodeManager(vault.path)
+        file_path = os.path.join(vault_dir, "corrupt.txt")
+        with open(file_path, "w") as f:
+            f.write("original content")
+        meta = manager.create_node(type_name="note", title="Corrupt", blob_path=file_path)
+        storage_dir = compute_storage_path(vault.path, meta.uuid)
+        blob_path = os.path.join(storage_dir, "data.txt")
+        with open(blob_path, "a") as f:
+            f.write("tampered")
+        output = run_repl(vault, [f"verify {meta.uuid[:12]}", "exit"])
+        assert "CORRUPTED" in output
+
+    def test_verify_corrupted_with_desc(self, vault, vault_dir):
+        manager = NodeManager(vault.path)
+        file_path = os.path.join(vault_dir, "desc_corrupt.txt")
+        with open(file_path, "w") as f:
+            f.write("content with desc")
+        meta = manager.create_node(
+            type_name="note",
+            title="Desc Corrupt",
+            blob_path=file_path,
+            description="A test description",
+        )
+        storage_dir = compute_storage_path(vault.path, meta.uuid)
+        blob_path = os.path.join(storage_dir, "data.txt")
+        with open(blob_path, "a") as f:
+            f.write("tampered")
+        output = run_repl(vault, [f"verify {meta.uuid[:12]}", "exit"])
+        assert "CORRUPTED" in output
+        assert "Description:" in output
 
 
 # ── Tag Commands ────────────────────────────────────────────────────────
@@ -469,6 +540,10 @@ class TestReplTag:
         output = run_repl(vault, ["tag", "exit"])
         assert "Usage:" in output
 
+    def test_tag_unknown_subcommand(self, vault):
+        output = run_repl(vault, ["tag invalid_sub", "exit"])
+        assert "Unknown tag subcommand" in output
+
 
 # ── Path Commands ───────────────────────────────────────────────────────
 
@@ -491,6 +566,10 @@ class TestReplPath:
     def test_path_no_args(self, vault):
         output = run_repl(vault, ["path", "exit"])
         assert "Usage:" in output
+
+    def test_path_unknown_subcommand(self, vault):
+        output = run_repl(vault, ["path invalid_sub", "exit"])
+        assert "Unknown path subcommand" in output
 
 
 # ── Alias Resolution ────────────────────────────────────────────────────
@@ -583,6 +662,18 @@ class TestReplHelp:
         output = run_repl(vault, ["help show", "exit"])
         assert "Display node details" in output or "show" in output
 
+    def test_help_alias_resolved(self, vault):
+        output = run_repl(vault, ["help n", "exit"])
+        assert "new" in output
+
+    def test_help_degraded(self):
+        output = run_repl_no_vault(["help", "exit"])
+        assert "No vault connected" in output
+
+    def test_help_unknown_command(self, vault):
+        output = run_repl(vault, ["help nonexistent", "exit"])
+        assert "No help available" in output
+
 
 # ── Tutor ───────────────────────────────────────────────────────────────
 
@@ -591,6 +682,34 @@ class TestReplTutor:
     def test_tutor_unsupported(self, vault):
         output = run_repl(vault, ["tutor", "exit"])
         assert "cannot run inside the REPL" in output
+
+
+# ── Handle Line Unit Tests ──────────────────────────────────────────────
+
+
+class TestReplHandleLine:
+    def test_repl_empty_input(self):
+        """_handle_line("") returns False directly."""
+        repl = Repl()
+        assert repl._handle_line("") is False
+
+    def test_repl_whitespace_input(self):
+        """_handle_line("   ") returns False directly."""
+        repl = Repl()
+        assert repl._handle_line("   ") is False
+
+    def test_repl_unknown_command(self):
+        """_handle_line("nonexistent_cmd") returns False."""
+        repl = Repl()
+        assert repl._handle_line("nonexistent_cmd") is False
+
+
+class TestReplResolveUnderscore:
+    def test_repl_resolve_underscore_no_last_uuid(self):
+        """_resolve_underscore(["_"]) returns None when no last_uuid."""
+        repl = Repl()
+        result = repl._resolve_underscore(["_"])
+        assert result is None
 
 
 # ── Unknown Command ─────────────────────────────────────────────────────
