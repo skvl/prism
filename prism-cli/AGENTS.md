@@ -64,3 +64,4 @@ The tutor (`tutor.py`) provides a guided interactive tutorial:
 - Lessons can be resumed from any lesson number via `prism tutor --lesson N`
 - Uses `subprocess.run` to execute `prism` commands with `sys.executable -m prism_cli.main`
 - Temporary vault is cleaned up unless the user opts to keep it
+

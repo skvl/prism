@@ -92,3 +92,29 @@ def test_completer_relative_path_has_no_dot_prefix() -> None:
             assert result == ["myvault/"]
         finally:
             os.chdir(original_cwd)
+
+
+def test_completer_expands_tilde_specific_path() -> None:
+    """Completer should expand ~/ effectively."""
+    completer = FilesystemCompleter()
+    home = os.path.expanduser("~/")
+    result = completer.complete("~")
+    assert len(result) > 0
+    assert all(r.startswith(os.path.expanduser("~")) for r in result[:5])
+
+
+def test_completer_oserror_returns_empty() -> None:
+    """Completer should return empty list on OSError."""
+    completer = FilesystemCompleter()
+    result = completer.complete("/NONEXISTENT_DIR_XYZ/")
+    assert result == []
+
+
+def test_completer_matches_files_with_extension() -> None:
+    """Completer should find files as well as directories."""
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(os.path.join(tmp, "testfile.txt"), "w") as f:
+            f.write("hello")
+        completer = FilesystemCompleter()
+        result = completer.complete(os.path.join(tmp, "testfile"))
+        assert any("testfile.txt" in r for r in result)

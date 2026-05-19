@@ -1,7 +1,7 @@
 """Tests for tag cloud filtering logic."""
 
 from collections import Counter
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -82,3 +82,84 @@ def test_highlight_co_occurring_no_selection(tag_cloud):
 def test_update_node_list_no_selection(tag_cloud):
     tag_cloud._selected_tags = set()
     tag_cloud._update_node_list()
+
+
+def test_on_button_pressed_selects_tag(tag_cloud):
+    tag_cloud._render_cloud = MagicMock()
+    tag_cloud._update_node_list = MagicMock()
+    event = MagicMock()
+    event.button._tag_name = "work"
+    tag_cloud.on_button_pressed(event)
+    assert "work" in tag_cloud._selected_tags
+
+
+def test_on_button_pressed_clear(tag_cloud):
+    tag_cloud._selected_tags = {"work"}
+    tag_cloud._render_cloud = MagicMock()
+    tag_cloud._update_node_list = MagicMock()
+    event = MagicMock()
+    event.button._tag_name = "__clear__"
+    tag_cloud.on_button_pressed(event)
+    assert len(tag_cloud._selected_tags) == 0
+
+
+def test_on_button_pressed_deselects_tag(tag_cloud):
+    tag_cloud._selected_tags = {"work"}
+    tag_cloud._render_cloud = MagicMock()
+    tag_cloud._update_node_list = MagicMock()
+    event = MagicMock()
+    event.button._tag_name = "work"
+    tag_cloud.on_button_pressed(event)
+    assert "work" not in tag_cloud._selected_tags
+
+
+def test_on_key_escape_clears_selection(tag_cloud):
+    tag_cloud._selected_tags = {"work"}
+    tag_cloud._render_cloud = MagicMock()
+    tag_cloud._update_node_list = MagicMock()
+    event = MagicMock()
+    event.key = "escape"
+    tag_cloud.on_key(event)
+    assert len(tag_cloud._selected_tags) == 0
+    assert event.stop.called
+
+
+def test_on_list_view_selected_posts_message(tag_cloud):
+    tag_cloud._filtered_nodes = [
+        _make_node("uuid1", ["work"]),
+        _make_node("uuid2", ["personal"]),
+    ]
+    tag_cloud.post_message = MagicMock()
+    event = MagicMock()
+    event.item._node_uuid = "uuid1"
+    tag_cloud.on_list_view_selected(event)
+    assert tag_cloud.post_message.called
+
+
+def test_on_list_view_selected_none_item(tag_cloud):
+    tag_cloud.post_message = MagicMock()
+    event = MagicMock()
+    event.item = None
+    tag_cloud.on_list_view_selected(event)
+    assert not tag_cloud.post_message.called
+
+
+def test_load_tags_with_vault(tag_cloud):
+    tag_cloud._vault = MagicMock()
+    with patch("prism_tui.tabs.tag_cloud.NodeManager") as MockNodeManager:
+        MockNodeManager.return_value.list_nodes.return_value = [
+            _make_node("a", ["work"]),
+        ]
+        tag_cloud._render_cloud = MagicMock()
+        tag_cloud._update_node_list = MagicMock()
+        tag_cloud._load_tags()
+    assert tag_cloud._tag_counts["work"] == 1
+
+
+def test_compose_returns_widgets(tag_cloud):
+    from textual.containers import VerticalScroll
+    from textual.widgets import ListView
+    result = list(tag_cloud.compose())
+    assert len(result) == 2
+    assert isinstance(result[0], VerticalScroll)
+    assert isinstance(result[1], ListView)

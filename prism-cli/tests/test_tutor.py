@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+from unittest.mock import MagicMock, patch
 
 import pytest
 from prism.node.manager import NodeManager
@@ -434,3 +435,276 @@ class TestGetNodeUUIDByTitle:
         tutor = Tutor()
         tutor.vault = vault
         assert tutor._get_node_uuid_by_title(vault, "NonExistent") is None
+
+
+# ── Tutor Lifecycle ──
+
+
+class TestTutorLifecycle:
+    def test_create_temp_vault(self, tutor):
+        tutor._create_temp_vault()
+        assert tutor.temp_dir != ""
+        assert os.path.exists(tutor.temp_dir)
+
+    def test_ensure_vault_open_when_not_initialized(self, tutor):
+        tutor._create_temp_vault()
+        result = tutor._ensure_vault_open()
+        assert result is None
+
+    def test_write_builtin_types(self, vault_dir):
+        from prism.vault.vault import Vault
+
+        vault = Vault.open(vault_dir)
+        tutor = Tutor()
+        tutor._write_builtin_types(vault)
+        types_dir = os.path.join(vault_dir, ".metadata", "types")
+        assert os.path.exists(os.path.join(types_dir, "note.toml"))
+        assert os.path.exists(os.path.join(types_dir, "contact.toml"))
+
+    def test_cleanup_keep(self, tutor):
+        tutor._create_temp_vault()
+        vault_path = tutor.temp_dir
+        tutor._cleanup(keep=True)
+        assert os.path.exists(vault_path)
+
+    def test_cleanup_remove(self, tutor):
+        tutor._create_temp_vault()
+        vault_path = tutor.temp_dir
+        tutor._cleanup(keep=False)
+        assert not os.path.exists(vault_path)
+
+
+# ── Output Rendering ──
+
+
+class TestTutorOutput:
+    def test_show_header_output(self, capsys, tutor):
+        tutor._show_header(1, "Test", 8)
+        captured = capsys.readouterr()
+        assert "Lesson 1/8: Test" in captured.out
+
+    def test_show_concept_output(self, capsys, tutor):
+        tutor._show_concept("Hello world")
+        captured = capsys.readouterr()
+        assert "Hello world" in captured.out
+
+    def test_show_command_output(self, capsys, tutor):
+        tutor._show_command("prism init .")
+        captured = capsys.readouterr()
+        assert "prism init ." in captured.out
+
+    def test_show_success_output(self, capsys, tutor):
+        tutor._show_success("Done!")
+        captured = capsys.readouterr()
+        assert "Done!" in captured.out
+
+    def test_show_warning_output(self, capsys, tutor):
+        tutor._show_warning("Oops!")
+        captured = capsys.readouterr()
+        assert "Oops!" in captured.out
+
+    def test_show_progress_output(self, capsys, tutor):
+        tutor._show_progress(1, 5)
+        captured = capsys.readouterr()
+        assert "Step 1/5" in captured.out
+
+    def test_show_final_summary_output(self, capsys, tutor):
+        tutor._show_final_summary()
+        captured = capsys.readouterr()
+        assert "Congratulations" in captured.out
+
+    def test_show_auto_run_output(self, capsys, tutor):
+        tutor._show_auto_run("prism init")
+        captured = capsys.readouterr()
+        assert "Auto-running" in captured.out
+
+    def test_show_output_with_text(self, capsys, tutor):
+        tutor._show_output("hello\nworld\n")
+        captured = capsys.readouterr()
+        assert "hello" in captured.out
+        assert "world" in captured.out
+
+    def test_show_output_empty(self, capsys, tutor):
+        tutor._show_output("")
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+
+# ── UUID Capture and Resolution ──
+
+
+class TestTutorUuidCapture:
+    def test_capture_uuid_no_vault(self, tutor):
+        tutor.vault = None
+        tutor._capture_uuid("test", "key1")
+        assert "key1" not in tutor._fmt
+
+    def test_resolve_uuid_returns_short_when_not_found(self, tutor):
+        result = tutor._resolve_uuid("unknown")
+        assert result == "unknown"
+
+    def test_resolve_uuid_returns_full(self, tutor):
+        tutor._fmt["_full_known"] = "full-uuid-value"
+        result = tutor._resolve_uuid("known")
+        assert result == "full-uuid-value"
+
+    def test_build_prism_cmd(self, tutor):
+        cmd = tutor._build_prism_cmd("prism init .")
+        import sys
+
+        assert cmd.startswith(sys.executable)
+        assert "init" in cmd
+
+
+# ── Lesson Plan Construction ──
+
+
+class TestLessonPlan:
+    def test_build_lesson_plan_returns_8_lessons(self, tutor):
+        lessons = tutor._build_lesson_plan()
+        assert len(lessons) == 8
+
+    def test_each_lesson_has_steps(self, tutor):
+        lessons = tutor._build_lesson_plan()
+        for lesson in lessons:
+            assert len(lesson.steps) >= 1
+
+    def test_lessons_are_ordered(self, tutor):
+        lessons = tutor._build_lesson_plan()
+        for i, lesson in enumerate(lessons, 1):
+            assert lesson.number == i
+
+
+# ── Step Execution ──
+
+
+class TestTutorStepExecution:
+    def test_run_step_concept_display(self, capsys, tutor, vault_dir):
+        from prism_cli.tutor import Step, StepResult
+
+        tutor.temp_dir = vault_dir
+        step = Step(
+            number=1,
+            concept="Test concept",
+            command="echo hello",
+            verify=lambda v: True,
+        )
+        with patch("builtins.input", return_value=""):
+            result = tutor._run_step(step)
+        assert result == StepResult.SUCCESS
+        captured = capsys.readouterr()
+        assert "Test concept" in captured.out
+
+    def test_run_step_with_prism_command(self, capsys, tutor):
+        from prism_cli.tutor import Step, StepResult
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            tutor.temp_dir = tmp_dir
+            step = Step(
+                number=1,
+                concept="Init",
+                command="prism init .",
+                verify=lambda v: True,
+            )
+            with patch("builtins.input", return_value=""):
+                result = tutor._run_step(step)
+            assert result == StepResult.SUCCESS
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_run_step_command_fails_retry_skip(self, capsys, tutor, vault_dir):
+        from prism_cli.tutor import Step, StepResult
+
+        tutor.temp_dir = vault_dir
+        step = Step(
+            number=1,
+            concept="Fail test",
+            command="nonexistent_command_xyz",
+            verify=lambda v: True,
+        )
+        with patch("builtins.input", side_effect=["", "n"]):
+            result = tutor._run_step(step)
+        assert result == StepResult.SKIP
+
+    def test_run_step_verification_fails_retry_skip(self, capsys, tutor, vault_dir):
+        from prism_cli.tutor import Step, StepResult
+
+        tutor.temp_dir = vault_dir
+        step = Step(
+            number=1,
+            concept="Verify fail",
+            command="echo hello",
+            verify=lambda v: False,
+        )
+        with patch("builtins.input", side_effect=["", "n"]):
+            result = tutor._run_step(step)
+        assert result == StepResult.SKIP
+
+    def test_prompt_keep_vault_yes(self, tutor):
+        with patch("builtins.input", return_value="y"):
+            assert tutor._prompt_keep_vault() is True
+
+    def test_prompt_keep_vault_no(self, tutor):
+        with patch("builtins.input", return_value=""):
+            assert tutor._prompt_keep_vault() is False
+
+    def test_prompt_keep_vault_eof(self, tutor):
+        with patch("builtins.input", side_effect=EOFError):
+            assert tutor._prompt_keep_vault() is False
+
+    def test_execute_command(self, tutor):
+        tutor._create_temp_vault()
+        result = tutor._execute_command("echo hello")
+        assert result.returncode == 0
+        assert "hello" in result.stdout
+
+
+# ── Run Method ──
+
+
+class TestTutorRun:
+    def test_run_invalid_lesson_number(self, capsys, tutor):
+        tutor.lesson_number = 99
+        with patch("builtins.input", return_value=""):
+            with patch.object(tutor, "_run_lesson", side_effect=KeyboardInterrupt):
+                with pytest.raises(SystemExit):
+                    tutor.run()
+        captured = capsys.readouterr()
+        assert "Starting from lesson 1" in captured.out
+
+    def test_run_keyboard_interrupt(self, capsys, tutor):
+        tutor._create_temp_vault = MagicMock(side_effect=KeyboardInterrupt)
+        with pytest.raises(SystemExit):
+            tutor.run()
+        captured = capsys.readouterr()
+        assert "Tutorial paused" in captured.out
+
+    def test_write_to_note_body(self, tutor, vault_dir):
+        from prism.node.manager import NodeManager
+        from prism.vault.vault import Vault
+
+        vault = Vault.open(vault_dir)
+        tutor.vault = vault
+        manager = NodeManager(vault.path)
+        node = manager.create_node("note", title="TestNote")
+        tutor._write_to_note_body("TestNote", "Hello World")
+        desc = manager.get_description(node.uuid)
+        assert desc is None  # description is different from body
+
+
+# ── Verify Helpers ──
+
+
+class TestTutorNewVerifyHelpers:
+    def test_verify_always_true(self, tutor, vault):
+        assert tutor._verify_always_true(vault) is True
+
+    def test_verify_blob_integrity_no_meta(self, tutor, vault_dir):
+        from prism.vault.vault import Vault
+
+        vault = Vault.open(vault_dir)
+        assert tutor._verify_blob_integrity(vault, "00000000-0000-0000-0000-000000000000") is False
+
+    def test_verify_change_detected_clean(self, tutor, vault):
+        assert tutor._verify_change_detected(vault) is False

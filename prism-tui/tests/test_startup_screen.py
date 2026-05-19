@@ -248,3 +248,48 @@ async def test_startup_screen_uses_path_input() -> None:
         screen = app.screen
         path_input = screen.query_one("#path-input")
         assert isinstance(path_input, PathInput)
+
+
+@pytest.mark.asyncio
+async def test_get_path_returns_stripped_value() -> None:
+    """_get_path should return the stripped path input value."""
+    app = _StartupHarness()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        path_input = screen.query_one("#path-input")
+        path_input.value = "  /some/path  "
+        result = screen._get_path()
+        assert result == "/some/path"
+
+
+@pytest.mark.asyncio
+async def test_get_path_returns_empty_when_empty() -> None:
+    """_get_path should return empty string when input is empty."""
+    app = _StartupHarness()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen.query_one("#path-input").value = ""
+        result = screen._get_path()
+        assert result == ""
+
+
+def test_path_is_vault_returns_false_for_nonexistent() -> None:
+    """_path_is_vault should return False for non-existent paths."""
+    from prism_tui.startup_screen import _path_is_vault
+    assert _path_is_vault("/nonexistent/path") is False
+
+
+def test_path_is_vault_returns_false_for_regular_dir(tmp_path) -> None:
+    """_path_is_vault should return False for a regular directory."""
+    from prism_tui.startup_screen import _path_is_vault
+    assert _path_is_vault(str(tmp_path)) is False
+
+
+def test_path_is_vault_returns_true_for_vault(tmp_path) -> None:
+    """_path_is_vault should return True for a vault directory."""
+    from prism_tui.startup_screen import _path_is_vault
+    from prism.vault.vault import Vault
+    vault = Vault.init(str(tmp_path / "myvault"))
+    assert _path_is_vault(vault.path) is True

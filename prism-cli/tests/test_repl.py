@@ -117,6 +117,50 @@ class TestReplDegraded:
         output = run_repl_no_vault(["open", "exit"])
         assert "Usage:" in output
 
+    def test_degraded_mode_show_shows_error(self, vault):
+        output = run_repl_no_vault(["show"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_edit_shows_error(self, vault):
+        output = run_repl_no_vault(["edit"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_rm_shows_error(self, vault):
+        output = run_repl_no_vault(["rm"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_query_shows_error(self, vault):
+        output = run_repl_no_vault(["query"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_backlinks_shows_error(self, vault):
+        output = run_repl_no_vault(["backlinks"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_graph_shows_error(self, vault):
+        output = run_repl_no_vault(["graph"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_status_shows_error(self, vault):
+        output = run_repl_no_vault(["status"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_verify_shows_error(self, vault):
+        output = run_repl_no_vault(["verify"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_path_shows_error(self, vault):
+        output = run_repl_no_vault(["path"])
+        assert "No vault connected" in output
+
+    def test_degraded_mode_tag_shows_error(self, vault):
+        output = run_repl_no_vault(["tag"])
+        assert "No vault connected" in output
+
+    def test_degraded_history_works(self):
+        output = run_repl_no_vault(["history"])
+        assert output is not None
+
 
 # ── New ─────────────────────────────────────────────────────────────────
 
@@ -719,3 +763,32 @@ class TestReplUnknown:
     def test_unknown_command(self, vault):
         output = run_repl(vault, ["nonexistent_command", "exit"])
         assert "Unknown command" in output
+
+
+# ── Edge Cases ──────────────────────────────────────────────────────────
+
+
+class TestReplEdgeCases:
+    def test_show_with_desc(self, vault):
+        output = run_repl(vault, ["show --desc", "exit"])
+        assert "Usage: show" in output
+
+    def test_tag_add_no_args(self, vault):
+        output = run_repl(vault, ["tag add", "exit"])
+        assert "Usage: tag add" in output or "Error" in output
+
+    def test_tag_rm_no_args(self, vault):
+        output = run_repl(vault, ["tag rm", "exit"])
+        assert "Usage: tag rm" in output or "Error" in output
+
+    def test_tag_list_empty(self, vault):
+        output = run_repl(vault, ["tag list", "exit"])
+        assert output is not None
+
+    def test_tag_rename_no_args(self, vault):
+        output = run_repl(vault, ["tag rename", "exit"])
+        assert "Usage: tag rename" in output
+
+    def test_link_same_nodes(self, vault):
+        output = run_repl(vault, ["link a a", "exit"])
+        assert output is not None

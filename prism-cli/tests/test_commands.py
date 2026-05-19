@@ -563,12 +563,15 @@ class TestCommitBodyEdit:
     def test_commit_body_edit(self, vault):
         manager = NodeManager(vault.path)
         meta = manager.create_node(type_name="note", title="Body Edit Commit")
-        body_path, original_mtime = manager.get_body_info(meta.uuid)
+        body_info = manager.get_body_info(meta.uuid)
+        assert body_info is not None
+        body_path, original_mtime = body_info
         new_content = "edited content"
         with open(body_path, "w") as f:
             f.write(new_content)
         st = os.stat(body_path)
         from prism.node.storage import sha256_file
+
         new_hash = sha256_file(body_path)
         result = commands.commit_body_edit(vault, meta.uuid, st.st_mtime, st.st_size, new_hash)
         assert result.ok
@@ -659,6 +662,7 @@ class TestCoverageGaps:
 
     def test_edit_node_body_no_body(self, vault):
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault.path)
         path_uuid = resolver.resolve_or_create("/some/path")
         result = commands.edit_node_body(vault, path_uuid)
@@ -674,6 +678,7 @@ class TestCoverageGaps:
         manager = NodeManager(vault.path)
         meta = manager.create_node(type_name="note", title="Add Skip")
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault.path)
         resolver.resolve_or_create("/testpath")
         commands.edit_node(vault, meta.uuid, add_path="/testpath")
@@ -685,6 +690,7 @@ class TestCoverageGaps:
         manager = NodeManager(vault.path)
         meta = manager.create_node(type_name="note", title="Rm Skip")
         from prism.path.resolver import PathResolver
+
         resolver = PathResolver(vault.path)
         resolver.resolve_or_create("/testpath2")
         result = commands.edit_node(vault, meta.uuid, remove_path="/testpath2")
@@ -700,11 +706,15 @@ class TestCoverageGaps:
         manager = NodeManager(vault.path)
         meta = manager.create_node(type_name="contact", title="Field Val Err", fields={"name": "X"})
         storage_dir = os.path.join(vault.path, ".storage")
+        meta_path = None
         for root, _dirs, files in os.walk(storage_dir):
             for fname in files:
                 if fname == "metadata.toml" and meta.uuid[:4] in root:
                     meta_path = os.path.join(root, fname)
                     break
+            if meta_path:
+                break
+        assert meta_path is not None
         content = open(meta_path).read().replace('type = "contact"', 'type = "unknown_type"')
         with open(meta_path, "w") as f:
             f.write(content)

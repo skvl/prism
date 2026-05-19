@@ -24,7 +24,9 @@ after I input data for query.
 ## F5. Low test coverage for core, cli and tui
 
 Check what is current test coverage and what could we do better. I would prefer
-to have coverage 90%+.
+to have coverage 95%+ for every subproject. Also update AGENTS.md to cover this
+requirement. Even for every new subproject. And setup coverage gates in
+pyproject.toml files
 
 ## F6. Simplify project files
 
