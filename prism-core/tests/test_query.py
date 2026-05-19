@@ -56,6 +56,10 @@ class TestQueryParser:
         ast = parser.parse('type:note AND tag:meeting AND "budget"')
         assert len(ast.terms) >= 5
 
+    def test_parse_path_filter_without_leading_slash(self, parser):
+        ast = parser.parse("path:foo")
+        assert ast.terms == [{"text": "path:foo"}]
+
 
 class TestQueryEngine:
     @pytest.fixture
@@ -217,3 +221,9 @@ class TestQueryEngine:
         ast = QueryParser().parse("nonexistent:value")
         result = engine.execute(ast)
         assert result == []
+
+    def test_path_filter_nonexistent(self, vault_dir):
+        engine = QueryEngine(vault_dir)
+        ast = QueryParser().parse("path:/nonexistent")
+        results = engine.execute(ast)
+        assert results == []

@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 import uuid
+from pathlib import Path
 
 import pytest
 from prism.node.storage import StorageEngine, compute_storage_path, sha256_file
@@ -96,6 +97,34 @@ class TestStorageEngine:
 
     def test_verify_integrity_no_blob(self, engine):
         assert engine.verify_integrity("00000000-0000-0000-0000-000000000000", "hash") is False
+
+    def test_read_description_missing(self, engine):
+        result = engine.read_description("00000000-0000-0000-0000-000000000000")
+        assert result is None
+
+    def test_delete_description_found(self, engine, vault_dir):
+        uid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+        storage_dir = compute_storage_path(vault_dir, uid)
+        os.makedirs(storage_dir, exist_ok=True)
+        desc_path = os.path.join(storage_dir, "description.md")
+        Path(desc_path).write_text("test description")
+        result = engine.delete_description(uid)
+        assert result is True
+        assert not os.path.exists(desc_path)
+
+    def test_delete_description_not_found(self, engine):
+        result = engine.delete_description("00000000-0000-0000-0000-000000000000")
+        assert result is False
+
+    def test_verify_description_integrity_empty_hash(self, engine, vault_dir):
+        uid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+        result = engine.verify_description_integrity(uid, "")
+        assert result is True
+
+    def test_verify_description_integrity_no_file(self, engine, vault_dir):
+        uid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+        result = engine.verify_description_integrity(uid, "abc123")
+        assert result is False
 
 
 class TestSha256:

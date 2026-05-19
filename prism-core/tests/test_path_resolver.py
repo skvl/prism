@@ -106,6 +106,16 @@ class TestPathResolver:
         resolver = PathResolver(vault_dir)
         assert resolver.complete("/z") == []
 
+    def test_complete_non_absolute_prefix(self, vault_dir):
+        resolver = PathResolver(vault_dir)
+        result = resolver.complete("foo")
+        assert result == []
+
+    def test_complete_nonexistent_parent(self, vault_dir):
+        resolver = PathResolver(vault_dir)
+        result = resolver.complete("/nonexistent/child")
+        assert result == []
+
     def test_resolve_uuid_to_path(self, vault_dir):
         resolver = PathResolver(vault_dir)
         root_uuid = self._root_uuid(vault_dir)

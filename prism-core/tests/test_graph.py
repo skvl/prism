@@ -99,6 +99,11 @@ class TestGraphExporter:
         result = GraphExporter.resolve_cross_vault_link("nonexistent-uuid", "target-uuid")
         assert result is None
 
+    def test_filter_nodes_include_paths(self):
+        nodes = [NodeMetadata(uuid="a1b2", type="path", title="Path")]
+        result = GraphExporter._filter_nodes(nodes, include_paths=True)
+        assert result == nodes
+
 
 class TestBacklinkIndex:
     @pytest.fixture

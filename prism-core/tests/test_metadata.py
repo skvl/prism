@@ -1,6 +1,7 @@
 import os
 import tempfile
 
+import pytest
 import tomlkit
 from prism.node.metadata import NodeMetadata
 
@@ -71,3 +72,19 @@ class TestNodeMetadata:
     def test_metadata_path(self):
         path = NodeMetadata.metadata_path("/some/dir")
         assert path == "/some/dir/metadata.toml"
+
+    def test_invalid_tag_raises(self):
+        import uuid
+
+        with pytest.raises(ValueError, match="Invalid tag"):
+            NodeMetadata(
+                uuid=str(uuid.uuid4()),
+                type="note",
+                title="test",
+                tags=["invalid tag with spaces"],
+                fields={},
+                links=[],
+                created_at="2024-01-01T00:00:00",
+                updated_at="2024-01-01T00:00:00",
+                sync_dirty=False,
+            )

@@ -79,6 +79,11 @@ class TestNodeManager:
         with pytest.raises(ValueError, match="Unknown type"):
             manager.create_node(type_name="nonexistent")
 
+    def test_create_node_path_type_raises(self, vault_dir):
+        manager = NodeManager(vault_dir)
+        with pytest.raises(ValueError, match="Path nodes cannot be created"):
+            manager.create_node("path", "Test Path")
+
     def test_create_with_fields(self, vault_dir):
         manager = NodeManager(vault_dir)
         meta = manager.create_node(
