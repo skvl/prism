@@ -7,6 +7,8 @@ from prism.node.manager import NodeManager
 from prism.vault.vault import Vault
 from prism_cli.completions import (
     complete_command,
+    complete_path,
+    complete_tag,
     complete_type_name,
     complete_uuid,
     resolve_completions,
@@ -170,3 +172,152 @@ class TestDegradedMode:
     def test_commands_still_work_without_vault(self):
         result = resolve_completions([], "", None, ALIASES)
         assert "init" in result
+
+
+class TestCompleteCommandNoMatch:
+    def test_complete_command_no_match(self):
+        result = complete_command("zzz", ALIASES)
+        assert result == []
+
+
+class TestResolveCompletionsForFlag:
+    def test_resolve_completions_for_new_flag(self):
+        result = resolve_completions(["new", "--t"], "--t", None, ALIASES)
+        assert "--tag" in result
+
+    def test_resolve_completions_for_edit_flag(self):
+        result = resolve_completions(["edit", "--a"], "--a", None, ALIASES)
+        assert "--add-path" in result
+
+    def test_resolve_completions_for_show_flag(self):
+        result = resolve_completions(["show", "--d"], "--d", None, ALIASES)
+        assert "--desc" in result
+
+
+class TestResolveCompletionsForTypeName:
+    def test_complete_type_after_new_partial(self, vault):
+        result = resolve_completions(["new", "no"], "no", vault, ALIASES)
+        assert "note" in result
+
+
+class TestCompleteTag:
+    def test_complete_tag_empty_vault(self):
+        result = complete_tag(None, "")
+        assert result == []
+
+    def test_complete_tag_empty_returns_list(self, vault):
+        result = complete_tag(vault, "")
+        assert isinstance(result, list)
+
+    def test_complete_tag_with_text(self, vault):
+        manager = NodeManager(vault.path)
+        manager.create_node(type_name="note", title="T", tags=["foo", "bar"])
+        result = complete_tag(vault, "fo")
+        assert "foo" in result
+
+
+class TestCompletePath:
+    def test_complete_path_empty_vault(self):
+        result = complete_path(None, "")
+        assert result == []
+
+    def test_complete_path_with_vault(self, vault):
+        result = complete_path(vault, "")
+        assert isinstance(result, list)
+
+    def test_complete_path_with_path_prefix(self, vault):
+        result = complete_path(vault, "path:")
+        assert isinstance(result, list)
+
+
+class TestTagSubcommandTagCompletion:
+    def test_tag_rename_completes_tag(self, vault):
+        result = resolve_completions(["tag", "rename", "so"], "so", vault, ALIASES)
+        assert isinstance(result, list)
+
+    def test_tag_rm_completes_tag_after_uuid(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="T")
+        result = resolve_completions(["tag", "rm", meta.uuid, "so"], "so", vault, ALIASES)
+        assert isinstance(result, list)
+
+
+class TestPathSubcommandPathCompletion:
+    def test_path_subcommand_three_parts(self, vault):
+        result = resolve_completions(["path", "create", "so"], "so", vault, ALIASES)
+        assert isinstance(result, list)
+
+
+class TestTagSubcommandTwoParts:
+    def test_tag_two_parts_with_text(self, vault):
+        result = resolve_completions(["tag", "a"], "a", vault, ALIASES)
+        assert "add" in result
+
+
+class TestPathPrefixTextCompletion:
+    def test_path_prefix_in_resolve(self, vault):
+        result = resolve_completions(["new", "path:"], "path:", vault, ALIASES)
+        assert isinstance(result, list)
+
+
+class TestDescFlagValue:
+    def test_desc_flag_returns_empty(self, vault):
+        result = resolve_completions(["new", "note", "--desc"], "", vault, ALIASES)
+        assert result == []
+
+
+class TestTypeNameCompletionEmptyVault:
+    def test_complete_type_name_empty_vault(self):
+        result = complete_type_name(None, "")
+        assert result == []
+
+
+class TestErrorHandling:
+    def test_complete_uuid_storage_error(self, vault_dir):
+        storage_dir = os.path.join(vault_dir, ".storage")
+        shutil.rmtree(storage_dir)
+        with open(storage_dir, "w") as f:
+            f.write("not a dir")
+        vault = Vault.open(vault_dir)
+        result = complete_uuid(vault, "")
+        assert result == []
+
+    def test_complete_tag_storage_error(self, vault_dir):
+        storage_dir = os.path.join(vault_dir, ".storage")
+        shutil.rmtree(storage_dir)
+        with open(storage_dir, "w") as f:
+            f.write("not a dir")
+        vault = Vault.open(vault_dir)
+        result = complete_tag(vault, "fo")
+        assert result == []
+
+    def test_complete_path_storage_error(self, vault_dir):
+        storage_dir = os.path.join(vault_dir, ".storage")
+        shutil.rmtree(storage_dir)
+        with open(storage_dir, "w") as f:
+            f.write("not a dir")
+        vault = Vault.open(vault_dir)
+        result = complete_path(vault, "/")
+        assert result == []
+
+
+class TestPathSubcommandFallthrough:
+    def test_path_two_parts_no_text(self, vault):
+        result = resolve_completions(["path", "create"], "", vault, ALIASES)
+        assert "create" in result
+
+    def test_path_invalid_subcommand(self, vault):
+        result = resolve_completions(["path", "bad", "x"], "x", vault, ALIASES)
+        assert result == []
+
+
+class TestTagSubcommandTwoPartsNoText:
+    def test_tag_two_parts_no_text(self, vault):
+        result = resolve_completions(["tag", "add"], "", vault, ALIASES)
+        assert "add" in result
+
+
+class TestTagSubcommandFallthrough:
+    def test_tag_invalid_subcommand(self, vault):
+        result = resolve_completions(["tag", "bad", "x"], "x", vault, ALIASES)
+        assert result == []
