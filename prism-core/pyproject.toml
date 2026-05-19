@@ -65,5 +65,5 @@ skips = ["B101", "B110", "B112", "B404", "B603", "B607"]
 exclude_dirs = ["tests"]
 
 [tool.coverage.run]
-source_pkg = ["prism"]
+source = ["prism"]
 relative_files = true
