@@ -84,6 +84,54 @@ class TestCliGroup:
             assert "No vault found" in result.output
 
 
+# ── List ────────────────────────────────────────────────────────────────
+
+
+class TestListCommand:
+    def test_no_vault(self, runner, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.chdir(tmp)
+            result = runner.invoke(cli, ["list-nodes"])
+            assert result.exit_code == 1
+            assert "No vault found" in result.output
+
+    def test_table_format(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="List Table")
+        result = runner.invoke(cli, ["--vault", vault_dir, "list-nodes"])
+        assert result.exit_code == 0
+        assert "List Table" in result.output
+        assert meta.uuid[:12] in result.output
+        assert "UUID" in result.output
+
+    def test_json_format(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="List JSON")
+        result = runner.invoke(cli, ["--vault", vault_dir, "--format", "json", "list-nodes"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        found = [n for n in data if n["uuid"] == meta.uuid]
+        assert len(found) == 1
+        assert found[0]["title"] == "List JSON"
+
+    def test_list_error(self, runner, vault_dir):
+        with patch(
+            "prism_cli.commands.list_nodes",
+            return_value=commands.CmdResult(ok=False, error="list fail", data={}),
+        ):
+            result = runner.invoke(cli, ["--vault", vault_dir, "list-nodes"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_with_desc(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        manager.create_node(type_name="note", title="List Desc")
+        result = runner.invoke(cli, ["--vault", vault_dir, "list-nodes", "--desc"])
+        assert result.exit_code == 0
+        assert "Description" in result.output
+        assert "List Desc" in result.output
+
+
 # ── Init ───────────────────────────────────────────────────────────────
 
 
@@ -192,6 +240,16 @@ class TestAddFileCommand:
         result = runner.invoke(cli, ["--vault", vault_dir, "add-file", file_path], input="")
         assert result.exit_code == 0
 
+    def test_with_invalid_type(self, runner, vault_dir):
+        file_path = os.path.join(vault_dir, "bad_type.txt")
+        with open(file_path, "w") as f:
+            f.write("content")
+        result = runner.invoke(
+            cli, ["--vault", vault_dir, "add-file", "--type", "nonexistent", file_path]
+        )
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
 
 # ── New ────────────────────────────────────────────────────────────────
 
@@ -257,6 +315,14 @@ class TestNewCommand:
         assert "Created note node:" in result.output
         assert "Added path: /misc" in result.output
 
+    def test_new_with_nonexistent_path(self, runner, vault_dir):
+        result = runner.invoke(
+            cli,
+            ["--vault", vault_dir, "new", "note", "Warn Path", "--add-path", "/nonexistent"],
+        )
+        assert result.exit_code == 0
+        assert "Path does not exist" in result.output
+
 
 # ── Edit ───────────────────────────────────────────────────────────────
 
@@ -321,7 +387,7 @@ class TestEditCommand:
                     result = runner.invoke(
                         cli,
                         ["--vault", vault_dir, "edit", meta.uuid[:12]],
-                        input="\n",
+                        input="New Name\nnobody@test.com\n",
                     )
         assert result.exit_code == 0
         assert "Fields updated." in result.output
@@ -407,6 +473,60 @@ class TestEditCommand:
         assert "not associated" in result.output
 
 
+class TestEditDescriptionCommand:
+    def test_set_description(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Set Desc")
+        result = runner.invoke(
+            cli,
+            ["--vault", vault_dir, "edit", meta.uuid[:12], "--desc", "A description"],
+        )
+        assert result.exit_code == 0
+        assert "Description updated." in result.output
+
+    def test_clear_description(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Clear Desc")
+        runner.invoke(
+            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--desc", "Existing desc"]
+        )
+        result = runner.invoke(
+            cli,
+            ["--vault", vault_dir, "edit", meta.uuid[:12], "--desc", ""],
+        )
+        assert result.exit_code == 0
+        assert "Description cleared." in result.output
+
+    def test_edit_desc_error(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Desc Error")
+        with patch(
+            "prism_cli.commands.set_node_description",
+            return_value=commands.CmdResult(ok=False, error="desc fail", data={}),
+        ):
+            result = runner.invoke(
+                cli,
+                ["--vault", vault_dir, "edit", meta.uuid[:12], "--desc", "test"],
+            )
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+    def test_edit_path_ops_error(self, runner, vault_dir):
+        runner.invoke(cli, ["--vault", vault_dir, "path", "create", "/test"])
+        manager = NodeManager(vault_dir)
+        meta = manager.create_node(type_name="note", title="Path Error")
+        with patch(
+            "prism_cli.commands.edit_node",
+            return_value=commands.CmdResult(ok=False, error="path fail", data={}),
+        ):
+            result = runner.invoke(
+                cli,
+                ["--vault", vault_dir, "edit", meta.uuid[:12], "--add-path", "/test"],
+            )
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
+
 # ── Rm ─────────────────────────────────────────────────────────────────
 
 
@@ -431,6 +551,33 @@ class TestRmCommand:
         )
         assert result.exit_code == 1
         assert "Node not found" in result.output
+
+    def test_rm_with_backlinks_confirm(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        source = manager.create_node(type_name="note", title="Src")
+        linker = manager.create_node(type_name="note", title="Linker")
+        runner.invoke(cli, ["--vault", vault_dir, "link", linker.uuid, source.uuid])
+        result = runner.invoke(cli, ["--vault", vault_dir, "rm", source.uuid], input="y\n")
+        assert result.exit_code == 0
+        assert "Deleted node" in result.output
+
+    def test_rm_with_backlinks_cancel(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        source = manager.create_node(type_name="note", title="Src2")
+        linker = manager.create_node(type_name="note", title="Linker2")
+        runner.invoke(cli, ["--vault", vault_dir, "link", linker.uuid, source.uuid])
+        result = runner.invoke(cli, ["--vault", vault_dir, "rm", source.uuid], input="n\n")
+        assert result.exit_code == 0
+        assert "Aborted." in result.output
+
+    def test_rm_with_backlinks_eof(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        source = manager.create_node(type_name="note", title="Src3")
+        linker = manager.create_node(type_name="note", title="Linker3")
+        runner.invoke(cli, ["--vault", vault_dir, "link", linker.uuid, source.uuid])
+        result = runner.invoke(cli, ["--vault", vault_dir, "rm", source.uuid], input="")
+        assert result.exit_code == 0
+        assert "Aborted." in result.output
 
 
 # ── Show ───────────────────────────────────────────────────────────────
@@ -690,6 +837,15 @@ class TestQueryCommand:
         assert len(data) == 1
         assert data[0]["uuid"] == meta.uuid
 
+    def test_query_error(self, runner, vault_dir):
+        with patch(
+            "prism_cli.commands.query_nodes",
+            return_value=commands.CmdResult(ok=False, error="query failed", data={}),
+        ):
+            result = runner.invoke(cli, ["--vault", vault_dir, "query", "tag:test"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+
     def test_results_without_tags(self, runner, vault_dir):
         manager = NodeManager(vault_dir)
         manager.create_node(type_name="note", title="No Tags")
@@ -820,6 +976,20 @@ class TestVerifyCommand:
         result = runner.invoke(cli, ["--vault", vault_dir, "verify", meta.uuid[:12]])
         assert result.exit_code == 1
         assert "CORRUPTED" in result.output
+
+    def test_ok_with_description(self, runner, vault_dir):
+        manager = NodeManager(vault_dir)
+        file_path = os.path.join(vault_dir, "verify_desc.txt")
+        with open(file_path, "w") as f:
+            f.write("verify content")
+        meta = manager.create_node(type_name="note", title="Verify Desc", blob_path=file_path)
+        runner.invoke(
+            cli, ["--vault", vault_dir, "edit", meta.uuid[:12], "--desc", "A test description"]
+        )
+        result = runner.invoke(cli, ["--vault", vault_dir, "verify", meta.uuid[:12]])
+        assert result.exit_code == 0
+        assert "OK" in result.output
+        assert "Description:" in result.output
 
 
 # ── Tag Commands ───────────────────────────────────────────────────────
@@ -1066,6 +1236,44 @@ class TestTuiBridge:
             mock_run.return_value.returncode = 42
             result = runner.invoke(cli, ["tui"])
             assert result.exit_code == 42
+
+
+# ── Tutor ──────────────────────────────────────────────────────────────
+
+
+class TestTutorCommand:
+    def test_tutor_help(self, runner):
+        result = runner.invoke(cli, ["tutor", "--help"])
+        assert result.exit_code == 0
+        assert "Lesson" in result.output
+
+    def test_tutor_run(self, runner):
+        with patch("prism_cli.main.Tutor") as mock_tutor:
+            result = runner.invoke(cli, ["tutor", "--lesson", "1"])
+            assert result.exit_code == 0
+            mock_tutor.return_value.run.assert_called_once()
+
+
+# ── REPL ───────────────────────────────────────────────────────────────
+
+
+class TestReplCommand:
+    def test_repl_no_vault(self, runner):
+        with patch("prism_cli.main.Repl") as mock_repl:
+            result = runner.invoke(cli, ["repl"])
+            assert result.exit_code == 0
+            mock_repl.return_value.run.assert_called_once()
+
+    def test_repl_with_vault(self, runner, vault_dir):
+        with patch("prism_cli.main.Repl") as mock_repl:
+            result = runner.invoke(cli, ["--vault", vault_dir, "repl"])
+            assert result.exit_code == 0
+            mock_repl.return_value.run.assert_called_once()
+
+    def test_repl_vault_not_found(self, runner):
+        result = runner.invoke(cli, ["repl", "--vault", "/nonexistent"])
+        assert result.exit_code == 1
+        assert "Error:" in result.output
 
 
 # ── __main__ block ─────────────────────────────────────────────────────
