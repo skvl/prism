@@ -557,3 +557,229 @@ class TestHelpers:
         result = commands.find_by_hash(manager, "nonexistent-hash-value")
         assert not result.ok
         assert result.code == "NOT_FOUND"
+
+
+class TestCommitBodyEdit:
+    def test_commit_body_edit(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Body Edit Commit")
+        body_path, original_mtime = manager.get_body_info(meta.uuid)
+        new_content = "edited content"
+        with open(body_path, "w") as f:
+            f.write(new_content)
+        st = os.stat(body_path)
+        from prism.node.storage import sha256_file
+        new_hash = sha256_file(body_path)
+        result = commands.commit_body_edit(vault, meta.uuid, st.st_mtime, st.st_size, new_hash)
+        assert result.ok
+        assert result.data["uuid"] == meta.uuid
+
+    def test_commit_body_edit_not_found(self, vault):
+        result = commands.commit_body_edit(vault, "garbage-uuid", 0.0, 0, "")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+
+class TestUpdateNodeFields:
+    def test_update_fields(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(
+            type_name="contact",
+            title="Field Update",
+            fields={"name": "Old", "email": "old@test.com"},
+        )
+        result = commands.update_node_fields(vault, meta.uuid, {"name": "New"})
+        assert result.ok
+        assert result.data["uuid"] == meta.uuid
+
+    def test_update_fields_not_found(self, vault):
+        result = commands.update_node_fields(vault, "garbage-uuid", {"name": "X"})
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_update_fields_no_changes(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(
+            type_name="contact",
+            title="No Changes",
+            fields={"name": "Same", "email": "s@test.com"},
+        )
+        result = commands.update_node_fields(vault, meta.uuid, {})
+        assert not result.ok
+        assert result.code == "NO_CHANGES"
+
+
+class TestCoverageGaps:
+    def test_delete_confirm_required(self, vault):
+        manager = NodeManager(vault.path)
+        source = manager.create_node(type_name="note", title="Source")
+        target = manager.create_node(type_name="note", title="Target")
+        commands.link_nodes(vault, source.uuid, target.uuid)
+        result = commands.delete_node(vault, target.uuid)
+        assert not result.ok
+        assert result.code == "CONFIRM_REQUIRED"
+
+    def test_verify_node_resolve_error(self, vault):
+        result = commands.verify_node(vault, "garbage-uuid")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_backlinks_resolve_error(self, vault):
+        result = commands.list_backlinks(vault, "garbage-uuid")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_query_parse_error(self, vault):
+        result = commands.query_nodes(vault, "invalid:::syntax")
+        assert result.ok
+
+    def test_create_with_nonexistent_add_path(self, vault):
+        result = commands.create_node(vault, "note", "Path Warn", add_path="/nonexistent/path")
+        assert result.ok
+        assert "warning" in result.data
+
+    def test_edit_node_not_found(self, vault):
+        result = commands.edit_node(vault, "garbage-uuid", add_path="/test")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_edit_node_validation_error_add_path(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Edit Val")
+        result = commands.edit_node(vault, meta.uuid, add_path="/nonexistent")
+        assert not result.ok
+        assert result.code == "VALIDATION_ERROR"
+
+    def test_edit_node_validation_error_remove_path(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Edit Val Rm")
+        result = commands.edit_node(vault, meta.uuid, remove_path="/nonexistent")
+        assert not result.ok
+        assert result.code == "VALIDATION_ERROR"
+
+    def test_edit_node_body_no_body(self, vault):
+        from prism.path.resolver import PathResolver
+        resolver = PathResolver(vault.path)
+        path_uuid = resolver.resolve_or_create("/some/path")
+        result = commands.edit_node_body(vault, path_uuid)
+        assert not result.ok
+        assert result.code == "NO_BODY"
+
+    def test_edit_node_body_resolve_error(self, vault):
+        result = commands.edit_node_body(vault, "garbage-uuid")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_edit_node_add_path_skipped(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Add Skip")
+        from prism.path.resolver import PathResolver
+        resolver = PathResolver(vault.path)
+        resolver.resolve_or_create("/testpath")
+        commands.edit_node(vault, meta.uuid, add_path="/testpath")
+        result = commands.edit_node(vault, meta.uuid, add_path="/testpath")
+        assert result.ok
+        assert result.data["action"] == "add_path_skipped"
+
+    def test_edit_node_remove_path_skipped(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Rm Skip")
+        from prism.path.resolver import PathResolver
+        resolver = PathResolver(vault.path)
+        resolver.resolve_or_create("/testpath2")
+        result = commands.edit_node(vault, meta.uuid, remove_path="/testpath2")
+        assert result.ok
+        assert result.data["action"] == "remove_path_skipped"
+
+    def test_edit_node_fields_not_found(self, vault):
+        result = commands.edit_node_fields(vault, "garbage-uuid")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_edit_node_fields_validation_error(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="contact", title="Field Val Err", fields={"name": "X"})
+        storage_dir = os.path.join(vault.path, ".storage")
+        for root, _dirs, files in os.walk(storage_dir):
+            for fname in files:
+                if fname == "metadata.toml" and meta.uuid[:4] in root:
+                    meta_path = os.path.join(root, fname)
+                    break
+        content = open(meta_path).read().replace('type = "contact"', 'type = "unknown_type"')
+        with open(meta_path, "w") as f:
+            f.write(content)
+        result = commands.edit_node_fields(vault, meta.uuid)
+        assert not result.ok
+        assert result.code == "VALIDATION_ERROR"
+
+    def test_set_description_not_found(self, vault):
+        result = commands.set_node_description(vault, "garbage-uuid", "desc")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_import_validation_error(self, vault, vault_dir):
+        file_path = os.path.join(vault_dir, "import_val.txt")
+        with open(file_path, "w") as f:
+            f.write("content")
+        result = commands.import_file(vault, file_path, type_name="nonexistent")
+        assert not result.ok
+        assert result.code == "VALIDATION_ERROR"
+
+    def test_tag_add_not_found(self, vault):
+        result = commands.manage_tags(vault, "add", "garbage-uuid", ["tag1"])
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_tag_add_invalid_tag(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Bad Tag")
+        result = commands.manage_tags(vault, "add", meta.uuid, ["invalid tag!"])
+        assert result.ok
+        assert result.data["results"][0]["status"] == "error"
+
+    def test_tag_rm_not_found(self, vault):
+        result = commands.manage_tags(vault, "rm", "garbage-uuid", ["tag1"])
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_tag_rm_usage(self, vault):
+        result = commands.manage_tags(vault, "rm")
+        assert not result.ok
+        assert result.code == "USAGE"
+
+    def test_tag_rm_not_present(self, vault):
+        manager = NodeManager(vault.path)
+        meta = manager.create_node(type_name="note", title="Rm Not Present")
+        result = commands.manage_tags(vault, "rm", meta.uuid, ["nonexistent_tag"])
+        assert result.ok
+        assert result.data["results"][0]["status"] == "not_present"
+
+    def test_tag_rename_usage(self, vault):
+        result = commands.manage_tags(vault, "rename", tags=["only_one"])
+        assert not result.ok
+        assert result.code == "USAGE"
+
+    def test_tag_rename_validation_error(self, vault):
+        result = commands.manage_tags(vault, "rename", tags=["old", "invalid new tag!"])
+        assert not result.ok
+        assert result.code == "VALIDATION_ERROR"
+
+    def test_path_create_validation_error(self, vault):
+        result = commands.manage_paths(vault, "create", "relative/path")
+        assert not result.ok
+        assert result.code == "VALIDATION_ERROR"
+
+    def test_path_rm_usage(self, vault):
+        result = commands.manage_paths(vault, "rm", "")
+        assert not result.ok
+        assert result.code == "USAGE"
+
+    def test_path_tree_not_found(self, vault):
+        result = commands.manage_paths(vault, "tree", "/nonexistent/path")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
+
+    def test_link_nodes_resolve_error(self, vault):
+        result = commands.link_nodes(vault, "garbage-source", "garbage-target")
+        assert not result.ok
+        assert result.code == "NOT_FOUND"
