@@ -55,3 +55,7 @@ disable = "C,R"
 
 [tool.pyright]
 extraPaths = ["../prism-core"]
+
+[tool.coverage.run]
+source = ["prism_tui"]
+relative_files = true
